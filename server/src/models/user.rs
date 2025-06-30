@@ -3,18 +3,23 @@ use crate::{
     models::{ErrNotPopulated, PasskeyCredential, Tag},
 };
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct User {
     id: Uuid,
     email: String,
     display_name: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[sqlx(skip)]
     tags: Option<Vec<Tag>>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[sqlx(skip)]
     passkeys: Option<Vec<PasskeyCredential>>,
 }
 
@@ -57,8 +62,8 @@ impl User {
     }
 
     #[must_use]
-    pub fn id(&self) -> Uuid {
-        self.id
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 
     #[must_use]
@@ -97,7 +102,7 @@ impl User {
         Ok(())
     }
 
-    pub fn remove_tag(&mut self, tag_id: Uuid) -> Result<(), ErrNotPopulated> {
+    pub fn remove_tag(&mut self, tag_id: &Uuid) -> Result<(), ErrNotPopulated> {
         self.tags
             .as_mut()
             .ok_or(ErrNotPopulated)?

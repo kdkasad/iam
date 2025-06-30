@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PasskeyCredential {
     id: Uuid,
     user_id: Uuid,
@@ -47,13 +48,13 @@ impl PasskeyCredential {
     }
 
     #[must_use]
-    pub fn id(&self) -> Uuid {
-        self.id
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 
     #[must_use]
-    pub fn user_id(&self) -> Uuid {
-        self.user_id
+    pub fn user_id(&self) -> &Uuid {
+        &self.user_id
     }
 
     #[must_use]
