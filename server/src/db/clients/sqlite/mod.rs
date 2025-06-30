@@ -363,7 +363,7 @@ impl DatabaseClient for SqliteClient {
         let tag = sql_query.fetch_one(&self.pool).await?;
         Ok(tag)
     }
-    
+
     async fn increment_passkey_sign_count(&self, id: &Uuid) -> Result<(), Self::Error> {
         sqlx::query("UPDATE passkeys SET sign_count = sign_count + 1, last_used_at = unixepoch() WHERE id = ?")
             .bind(id)

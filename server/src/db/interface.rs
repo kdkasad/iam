@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::models::{PasskeyCredential, Tag, User, UserUpdate, TagUpdate};
+use crate::models::{PasskeyCredential, Tag, TagUpdate, User, UserUpdate};
 
 pub trait DatabaseClient {
     type Error: std::error::Error + Send + Sync + 'static;
@@ -34,8 +34,10 @@ pub trait DatabaseClient {
         &self,
         user_id: &Uuid,
     ) -> Result<Vec<PasskeyCredential>, Self::Error>;
-    async fn update_passkey(&self, passkey: &PasskeyCredential)
-    -> Result<PasskeyCredential, Self::Error>;
+    async fn update_passkey(
+        &self,
+        passkey: &PasskeyCredential,
+    ) -> Result<PasskeyCredential, Self::Error>;
     async fn delete_passkey_by_id(&self, id: &Uuid) -> Result<(), Self::Error>;
     async fn increment_passkey_sign_count(&self, id: &Uuid) -> Result<(), Self::Error>;
 }

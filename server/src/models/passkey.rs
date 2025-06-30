@@ -13,7 +13,6 @@ pub struct PasskeyCredential {
     last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-
 impl PasskeyCredential {
     pub fn new(user_id: Uuid, credential_id: Vec<u8>, public_key: Vec<u8>) -> Self {
         Self {

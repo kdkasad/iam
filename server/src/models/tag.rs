@@ -94,9 +94,7 @@ pub struct TagUpdate {
 
 impl TagUpdate {
     pub fn new() -> Self {
-        Self {
-            name: None,
-        }
+        Self { name: None }
     }
 
     pub fn with_name(mut self, name: String) -> Self {
