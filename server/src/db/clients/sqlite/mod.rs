@@ -6,12 +6,15 @@ use sqlx::{
 };
 use uuid::Uuid;
 
-use crate::{db::interface::DatabaseClient, models::{User, Tag, PasskeyCredential}};
+use crate::{
+    db::interface::DatabaseClient,
+    models::{PasskeyCredential, Tag, TagUpdate, User, UserUpdate},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SqliteError {
     #[error("database error: {0}")]
-    DatabaseError(#[source] sqlx::Error),
+    DatabaseError(#[from] sqlx::Error),
 
     #[error("environment variable not set: {0}")]
     MissingEnv(&'static str),
@@ -19,17 +22,8 @@ pub enum SqliteError {
     #[error("environment variable {0} is not valid UTF-8")]
     EnvNotUtf8(&'static str),
 
-    #[error("the requested resource already exists")]
-    AlreadyExists,
-}
-
-impl From<sqlx::Error> for SqliteError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(e) if e.is_unique_violation() => Self::AlreadyExists,
-            other => Self::DatabaseError(other),
-        }
-    }
+    #[error("the update request contains no changes")]
+    EmptyUpdate,
 }
 
 #[derive(Debug, Clone)]
@@ -104,15 +98,46 @@ impl DatabaseClient for SqliteClient {
         Ok(user)
     }
 
-    async fn update_user(&self, user: &User) -> Result<User, Self::Error> {
-        sqlx::query("UPDATE users SET email = ?, display_name = ?, updated_at = ? WHERE id = ?")
-            .bind(user.email())
-            .bind(user.display_name())
-            .bind(user.updated_at())
-            .bind(user.id())
-            .execute(&self.pool)
-            .await?;
-        Ok(user.clone())
+    async fn update_user(&self, id: &Uuid, update: &UserUpdate) -> Result<User, Self::Error> {
+        if update.is_empty() {
+            return Err(SqliteError::EmptyUpdate);
+        }
+
+        let mut query_parts = Vec::new();
+        let mut has_email = false;
+        let mut has_display_name = false;
+
+        if update.email.is_some() {
+            query_parts.push("email = ?");
+            has_email = true;
+        }
+
+        if update.display_name.is_some() {
+            query_parts.push("display_name = ?");
+            has_display_name = true;
+        }
+
+        // Always update the updated_at timestamp using SQLite's unixepoch function
+        query_parts.push("updated_at = unixepoch()");
+
+        let query = format!(
+            "UPDATE users SET {} WHERE id = ? RETURNING id, email, display_name, created_at, updated_at",
+            query_parts.join(", ")
+        );
+
+        let mut sql_query = sqlx::query_as::<_, User>(&query);
+
+        // Bind parameters in order
+        if has_email {
+            sql_query = sql_query.bind(update.email.as_ref().unwrap());
+        }
+        if has_display_name {
+            sql_query = sql_query.bind(update.display_name.as_ref().unwrap());
+        }
+        sql_query = sql_query.bind(id);
+
+        let user = sql_query.fetch_one(&self.pool).await?;
+        Ok(user)
     }
 
     async fn delete_user_by_id(&self, id: &Uuid) -> Result<(), Self::Error> {
@@ -175,22 +200,20 @@ impl DatabaseClient for SqliteClient {
     }
 
     async fn get_tag_by_id(&self, id: &Uuid) -> Result<crate::models::Tag, Self::Error> {
-        let tag: Tag = sqlx::query_as(
-            "SELECT id, name, created_at, updated_at FROM tags WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await?;
+        let tag: Tag =
+            sqlx::query_as("SELECT id, name, created_at, updated_at FROM tags WHERE id = ?")
+                .bind(id)
+                .fetch_one(&self.pool)
+                .await?;
         Ok(tag)
     }
 
     async fn get_tag_by_name(&self, name: &str) -> Result<crate::models::Tag, Self::Error> {
-        let tag: Tag = sqlx::query_as(
-            "SELECT id, name, created_at, updated_at FROM tags WHERE name = ?",
-        )
-        .bind(name)
-        .fetch_one(&self.pool)
-        .await?;
+        let tag: Tag =
+            sqlx::query_as("SELECT id, name, created_at, updated_at FROM tags WHERE name = ?")
+                .bind(name)
+                .fetch_one(&self.pool)
+                .await?;
         Ok(tag)
     }
 
@@ -302,6 +325,47 @@ impl DatabaseClient for SqliteClient {
 
     async fn delete_passkey_by_id(&self, id: &Uuid) -> Result<(), Self::Error> {
         sqlx::query("DELETE FROM passkeys WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn update_tag(&self, id: &Uuid, update: &TagUpdate) -> Result<Tag, Self::Error> {
+        if update.is_empty() {
+            return Err(SqliteError::EmptyUpdate);
+        }
+
+        let mut query_parts = Vec::new();
+        let mut has_name = false;
+
+        if update.name.is_some() {
+            query_parts.push("name = ?");
+            has_name = true;
+        }
+
+        // Always update the updated_at timestamp using SQLite's unixepoch function
+        query_parts.push("updated_at = unixepoch()");
+
+        let query = format!(
+            "UPDATE tags SET {} WHERE id = ? RETURNING id, name, created_at, updated_at",
+            query_parts.join(", ")
+        );
+
+        let mut sql_query = sqlx::query_as::<_, Tag>(&query);
+
+        // Bind parameters in order
+        if has_name {
+            sql_query = sql_query.bind(update.name.as_ref().unwrap());
+        }
+        sql_query = sql_query.bind(id);
+
+        let tag = sql_query.fetch_one(&self.pool).await?;
+        Ok(tag)
+    }
+    
+    async fn increment_passkey_sign_count(&self, id: &Uuid) -> Result<(), Self::Error> {
+        sqlx::query("UPDATE passkeys SET sign_count = sign_count + 1, last_used_at = unixepoch() WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await?;

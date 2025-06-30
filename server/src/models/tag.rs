@@ -47,10 +47,6 @@ impl Tag {
         }
     }
 
-    fn update(&mut self) {
-        self.updated_at = chrono::Utc::now();
-    }
-
     #[must_use]
     pub fn id(&self) -> &Uuid {
         &self.id
@@ -59,11 +55,6 @@ impl Tag {
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    pub fn set_name(&mut self, name: String) {
-        self.name = name;
-        self.update();
     }
 
     #[must_use]
@@ -93,5 +84,27 @@ impl Tag {
                 Ok(self.users.as_deref().unwrap())
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TagUpdate {
+    pub name: Option<String>,
+}
+
+impl TagUpdate {
+    pub fn new() -> Self {
+        Self {
+            name: None,
+        }
+    }
+
+    pub fn with_name(mut self, name: String) -> Self {
+        self.name = Some(name);
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.name.is_none()
     }
 }

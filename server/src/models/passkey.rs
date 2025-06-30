@@ -72,11 +72,6 @@ impl PasskeyCredential {
         self.sign_count
     }
 
-    pub fn update_sign_count(&mut self, new_count: u32) {
-        self.sign_count = new_count;
-        self.last_used_at = Some(chrono::Utc::now());
-    }
-
     #[must_use]
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.created_at

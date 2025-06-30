@@ -57,10 +57,6 @@ impl User {
         }
     }
 
-    fn update(&mut self) {
-        self.updated_at = chrono::Utc::now();
-    }
-
     #[must_use]
     pub fn id(&self) -> &Uuid {
         &self.id
@@ -71,19 +67,9 @@ impl User {
         &self.email
     }
 
-    pub fn set_email(&mut self, email: String) {
-        self.email = email;
-        self.update();
-    }
-
     #[must_use]
     pub fn display_name(&self) -> &str {
         &self.display_name
-    }
-
-    pub fn set_display_name(&mut self, display_name: String) {
-        self.display_name = display_name;
-        self.update();
     }
 
     #[must_use]
@@ -94,21 +80,6 @@ impl User {
     #[must_use]
     pub fn updated_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.updated_at
-    }
-
-    pub fn add_tag(&mut self, tag: Tag) -> Result<(), ErrNotPopulated> {
-        self.tags.as_mut().ok_or(ErrNotPopulated)?.push(tag);
-        self.update();
-        Ok(())
-    }
-
-    pub fn remove_tag(&mut self, tag_id: &Uuid) -> Result<(), ErrNotPopulated> {
-        self.tags
-            .as_mut()
-            .ok_or(ErrNotPopulated)?
-            .retain(|tag| tag.id() != tag_id);
-        self.update();
-        Ok(())
     }
 
     #[must_use]
@@ -142,5 +113,34 @@ impl User {
                 Ok(self.passkeys.as_deref().unwrap())
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct UserUpdate {
+    pub email: Option<String>,
+    pub display_name: Option<String>,
+}
+
+impl UserUpdate {
+    pub fn new() -> Self {
+        Self {
+            email: None,
+            display_name: None,
+        }
+    }
+
+    pub fn with_email(mut self, email: String) -> Self {
+        self.email = Some(email);
+        self
+    }
+
+    pub fn with_display_name(mut self, display_name: String) -> Self {
+        self.display_name = Some(display_name);
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.email.is_none() && self.display_name.is_none()
     }
 }

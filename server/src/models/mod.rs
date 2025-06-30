@@ -5,8 +5,8 @@ mod tag;
 mod user;
 
 pub use passkey::PasskeyCredential;
-pub use tag::Tag;
-pub use user::User;
+pub use tag::{Tag, TagUpdate};
+pub use user::{User, UserUpdate};
 
 /// Helper function to generate a new UUID.
 /// This allows us to easily switch out the UUID version if needed.
