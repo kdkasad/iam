@@ -1,7 +1,12 @@
-use uuid::Uuid; 
+use uuid::Uuid;
 
-mod user;
+mod passkey;
 mod tag;
+mod user;
+
+pub use passkey::PasskeyCredential;
+pub use tag::Tag;
+pub use user::User;
 
 /// Helper function to generate a new UUID.
 /// This allows us to easily switch out the UUID version if needed.
@@ -9,5 +14,6 @@ pub fn new_uuid() -> Uuid {
     Uuid::new_v4()
 }
 
-pub use user::{User, PasskeyCredential};
-pub use tag::Tag;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, thiserror::Error)]
+#[error("field not populated")]
+pub struct ErrNotPopulated;

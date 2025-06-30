@@ -1,27 +1,21 @@
+use crate::{
+    db::interface::DatabaseClient,
+    models::{ErrNotPopulated, PasskeyCredential, Tag},
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::models::Tag;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    pub id: Uuid,
-    pub email: String,
-    pub display_name: String,
-    pub tags: Vec<Tag>,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
-    pub passkeys: Vec<PasskeyCredential>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PasskeyCredential {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub credential_id: Vec<u8>,
-    pub public_key: Vec<u8>,
-    pub sign_count: u32,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
+    id: Uuid,
+    email: String,
+    display_name: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<Vec<Tag>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    passkeys: Option<Vec<PasskeyCredential>>,
 }
 
 impl User {
@@ -31,10 +25,30 @@ impl User {
             id: super::new_uuid(),
             email,
             display_name,
-            tags: Vec::new(),
             created_at: now,
             updated_at: now,
-            passkeys: Vec::new(),
+            tags: None,
+            passkeys: None,
+        }
+    }
+
+    pub fn new_full(
+        id: Uuid,
+        email: String,
+        display_name: String,
+        created_at: chrono::DateTime<chrono::Utc>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+        tags: Option<Vec<Tag>>,
+        passkeys: Option<Vec<PasskeyCredential>>,
+    ) -> Self {
+        Self {
+            id,
+            email,
+            display_name,
+            created_at,
+            updated_at,
+            tags,
+            passkeys,
         }
     }
 
@@ -42,36 +56,86 @@ impl User {
         self.updated_at = chrono::Utc::now();
     }
 
-    pub fn add_tag(&mut self, tag: Tag) {
-        self.tags.push(tag);
+    #[must_use]
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    #[must_use]
+    pub fn email(&self) -> &str {
+        &self.email
+    }
+
+    pub fn set_email(&mut self, email: String) {
+        self.email = email;
         self.update();
     }
 
-    pub fn remove_tag(&mut self, tag_id: Uuid) {
-        self.tags.retain(|tag| tag.id != tag_id);
+    #[must_use]
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    pub fn set_display_name(&mut self, display_name: String) {
+        self.display_name = display_name;
         self.update();
     }
 
-    pub fn has_tag(&self, tag_name: &str) -> bool {
-        self.tags.iter().any(|tag| tag.name == tag_name)
+    #[must_use]
+    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.created_at
     }
-}
 
-impl PasskeyCredential {
-    pub fn new(user_id: Uuid, credential_id: Vec<u8>, public_key: Vec<u8>) -> Self {
-        Self {
-            id: super::new_uuid(),
-            user_id,
-            credential_id,
-            public_key,
-            sign_count: 0,
-            created_at: chrono::Utc::now(),
-            last_used_at: None,
+    #[must_use]
+    pub fn updated_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.updated_at
+    }
+
+    pub fn add_tag(&mut self, tag: Tag) -> Result<(), ErrNotPopulated> {
+        self.tags.as_mut().ok_or(ErrNotPopulated)?.push(tag);
+        self.update();
+        Ok(())
+    }
+
+    pub fn remove_tag(&mut self, tag_id: Uuid) -> Result<(), ErrNotPopulated> {
+        self.tags
+            .as_mut()
+            .ok_or(ErrNotPopulated)?
+            .retain(|tag| tag.id() != tag_id);
+        self.update();
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn tags(&mut self) -> Result<&[Tag], ErrNotPopulated> {
+        self.tags.as_deref().ok_or(ErrNotPopulated)
+    }
+
+    pub async fn fetch_tags<C>(&mut self, client: C) -> Result<&[Tag], C::Error>
+    where
+        C: DatabaseClient,
+    {
+        match self.tags {
+            Some(ref tags) => Ok(tags),
+            None => {
+                let tags = client.get_tags_by_user_id(&self.id).await?;
+                self.tags = Some(tags);
+                Ok(self.tags.as_deref().unwrap())
+            }
         }
     }
 
-    pub fn update_sign_count(&mut self, new_count: u32) {
-        self.sign_count = new_count;
-        self.last_used_at = Some(chrono::Utc::now());
+    pub async fn fetch_passkeys<C>(&mut self, client: C) -> Result<&[PasskeyCredential], C::Error>
+    where
+        C: DatabaseClient,
+    {
+        match self.passkeys {
+            Some(ref passkeys) => Ok(passkeys),
+            None => {
+                let passkeys = client.get_passkeys_by_user_id(&self.id).await?;
+                self.passkeys = Some(passkeys);
+                Ok(self.passkeys.as_deref().unwrap())
+            }
+        }
     }
-} 
+}
