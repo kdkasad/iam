@@ -16,7 +16,10 @@ pub enum SqliteError {
     #[error("database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
 
-    #[error("environment variable not set: {0}")]
+    #[error("failed to migrate database to current version: {0}")]
+    Migration(#[from] sqlx::migrate::MigrateError),
+
+    #[error("required environment variable not set: {0}")]
     MissingEnv(&'static str),
 
     #[error("environment variable {0} is not valid UTF-8")]
@@ -50,8 +53,8 @@ impl SqliteClient {
         })
     }
 
-    async fn do_open(path: &str) -> Result<SqlitePool, sqlx::Error> {
-        SqlitePool::connect_with(
+    async fn do_open(path: &str) -> Result<SqlitePool, SqliteError> {
+        let pool = SqlitePool::connect_with(
             SqliteConnectOptions::new()
                 .synchronous(SqliteSynchronous::Normal)
                 .create_if_missing(true)
@@ -59,7 +62,13 @@ impl SqliteClient {
                 .pragma("foreign_keys", "ON")
                 .filename(path),
         )
-        .await
+        .await?;
+
+        sqlx::migrate!("src/db/clients/sqlite/migrations")
+            .run(&pool)
+            .await?;
+
+        Ok(pool)
     }
 }
 
