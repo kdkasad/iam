@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, future::Future};
 
 use uuid::Uuid;
 
@@ -6,40 +6,85 @@ use crate::models::{PasskeyCredential, Tag, TagUpdate, User, UserUpdate};
 
 pub trait DatabaseClient: Send + Sync + 'static {
     // User repository
-    async fn create_user(&self, user: &User) -> Result<(), DatabaseError>;
-    async fn get_user_by_id(&self, id: &Uuid) -> Result<User, DatabaseError>;
-    async fn get_user_by_email(&self, email: &str) -> Result<User, DatabaseError>;
-    async fn update_user(&self, id: &Uuid, update: &UserUpdate) -> Result<User, DatabaseError>;
-    async fn delete_user_by_id(&self, id: &Uuid) -> Result<(), DatabaseError>;
-    async fn add_tag_to_user(&self, user_id: &Uuid, tag: &Tag) -> Result<(), DatabaseError>;
-    async fn remove_tag_from_user(&self, user_id: &Uuid, tag: &Tag) -> Result<(), DatabaseError>;
-    async fn get_users_by_tag_id(&self, tag_id: &Uuid) -> Result<Vec<User>, DatabaseError>;
-
-    // Tag repository
-    async fn create_tag(&self, tag: &Tag) -> Result<(), DatabaseError>;
-    async fn get_tag_by_id(&self, id: &Uuid) -> Result<Tag, DatabaseError>;
-    async fn get_tag_by_name(&self, name: &str) -> Result<Tag, DatabaseError>;
-    async fn update_tag(&self, id: &Uuid, update: &TagUpdate) -> Result<Tag, DatabaseError>;
-    async fn delete_tag_by_id(&self, id: &Uuid) -> Result<(), DatabaseError>;
-    async fn get_tags_by_user_id(&self, user_id: &Uuid) -> Result<Vec<Tag>, DatabaseError>;
-
-    // Passkey repository
-    async fn create_passkey(&self, passkey: &PasskeyCredential) -> Result<(), DatabaseError>;
-    async fn get_passkey_by_id(&self, id: &Uuid) -> Result<PasskeyCredential, DatabaseError>;
-    async fn get_passkey_by_credential_id(
+    fn create_user(&self, user: &User) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn get_user_by_id(&self, id: &Uuid)
+    -> impl Future<Output = Result<User, DatabaseError>> + Send;
+    fn get_user_by_email(
         &self,
-        credential_id: &[u8],
-    ) -> Result<PasskeyCredential, DatabaseError>;
-    async fn get_passkeys_by_user_id(
+        email: &str,
+    ) -> impl Future<Output = Result<User, DatabaseError>> + Send;
+    fn update_user(
+        &self,
+        id: &Uuid,
+        update: &UserUpdate,
+    ) -> impl Future<Output = Result<User, DatabaseError>> + Send;
+    fn delete_user_by_id(
+        &self,
+        id: &Uuid,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn add_tag_to_user(
         &self,
         user_id: &Uuid,
-    ) -> Result<Vec<PasskeyCredential>, DatabaseError>;
-    async fn update_passkey(
+        tag: &Tag,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn remove_tag_from_user(
+        &self,
+        user_id: &Uuid,
+        tag: &Tag,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn get_users_by_tag_id(
+        &self,
+        tag_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<User>, DatabaseError>> + Send;
+
+    // Tag repository
+    fn create_tag(&self, tag: &Tag) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn get_tag_by_id(&self, id: &Uuid) -> impl Future<Output = Result<Tag, DatabaseError>> + Send;
+    fn get_tag_by_name(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Tag, DatabaseError>> + Send;
+    fn update_tag(
+        &self,
+        id: &Uuid,
+        update: &TagUpdate,
+    ) -> impl Future<Output = Result<Tag, DatabaseError>> + Send;
+    fn delete_tag_by_id(&self, id: &Uuid)
+    -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn get_tags_by_user_id(
+        &self,
+        user_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<Tag>, DatabaseError>> + Send;
+
+    // Passkey repository
+    fn create_passkey(
         &self,
         passkey: &PasskeyCredential,
-    ) -> Result<PasskeyCredential, DatabaseError>;
-    async fn delete_passkey_by_id(&self, id: &Uuid) -> Result<(), DatabaseError>;
-    async fn increment_passkey_sign_count(&self, id: &Uuid) -> Result<(), DatabaseError>;
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn get_passkey_by_id(
+        &self,
+        id: &Uuid,
+    ) -> impl Future<Output = Result<PasskeyCredential, DatabaseError>> + Send;
+    fn get_passkey_by_credential_id(
+        &self,
+        credential_id: &[u8],
+    ) -> impl Future<Output = Result<PasskeyCredential, DatabaseError>> + Send;
+    fn get_passkeys_by_user_id(
+        &self,
+        user_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<PasskeyCredential>, DatabaseError>> + Send;
+    fn update_passkey(
+        &self,
+        passkey: &PasskeyCredential,
+    ) -> impl Future<Output = Result<PasskeyCredential, DatabaseError>> + Send;
+    fn delete_passkey_by_id(
+        &self,
+        id: &Uuid,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+    fn increment_passkey_sign_count(
+        &self,
+        id: &Uuid,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
 }
 
 /// Error type for database operations

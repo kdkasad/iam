@@ -82,7 +82,6 @@ impl User {
         self.updated_at
     }
 
-    #[must_use]
     pub fn tags(&mut self) -> Result<&[Tag], ErrNotPopulated> {
         self.tags.as_deref().ok_or(ErrNotPopulated)
     }
