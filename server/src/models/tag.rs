@@ -3,7 +3,7 @@ use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 use crate::{
-    db::interface::DatabaseClient,
+    db::interface::{DatabaseClient, DatabaseError},
     models::{ErrNotPopulated, User},
 };
 
@@ -72,7 +72,7 @@ impl Tag {
         self.users.as_deref().ok_or(ErrNotPopulated)
     }
 
-    pub async fn fetch_users<C>(&mut self, client: C) -> Result<&[User], C::Error>
+    pub async fn fetch_users<C>(&mut self, client: C) -> Result<&[User], DatabaseError>
     where
         C: DatabaseClient,
     {

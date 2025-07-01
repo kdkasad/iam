@@ -1,5 +1,5 @@
 use crate::{
-    db::interface::DatabaseClient,
+    db::interface::{DatabaseClient, DatabaseError},
     models::{ErrNotPopulated, PasskeyCredential, Tag},
 };
 use serde::{Deserialize, Serialize};
@@ -87,7 +87,7 @@ impl User {
         self.tags.as_deref().ok_or(ErrNotPopulated)
     }
 
-    pub async fn fetch_tags<C>(&mut self, client: C) -> Result<&[Tag], C::Error>
+    pub async fn fetch_tags<C>(&mut self, client: C) -> Result<&[Tag], DatabaseError>
     where
         C: DatabaseClient,
     {
@@ -101,7 +101,10 @@ impl User {
         }
     }
 
-    pub async fn fetch_passkeys<C>(&mut self, client: C) -> Result<&[PasskeyCredential], C::Error>
+    pub async fn fetch_passkeys<C>(
+        &mut self,
+        client: C,
+    ) -> Result<&[PasskeyCredential], DatabaseError>
     where
         C: DatabaseClient,
     {
