@@ -1,90 +1,114 @@
-use std::{borrow::Cow, future::Future};
+use std::{borrow::Cow, future::Future, pin::Pin};
 
 use uuid::Uuid;
 
 use crate::models::{PasskeyCredential, Tag, TagUpdate, User, UserUpdate};
 
 pub trait DatabaseClient: Send + Sync + 'static {
+
     // User repository
-    fn create_user(&self, user: &User) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn get_user_by_id(&self, id: &Uuid)
-    -> impl Future<Output = Result<User, DatabaseError>> + Send;
-    fn get_user_by_email(
+
+    fn create_user<'user>(&self, user: &'user User) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'user>>;
+
+    fn get_user_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'id>>;
+
+    fn get_user_by_email<'email>(
         &self,
-        email: &str,
-    ) -> impl Future<Output = Result<User, DatabaseError>> + Send;
-    fn update_user(
+        email: &'email str,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'email>>;
+
+    fn update_user<'arg>(
         &self,
-        id: &Uuid,
-        update: &UserUpdate,
-    ) -> impl Future<Output = Result<User, DatabaseError>> + Send;
-    fn delete_user_by_id(
+        id: &'arg Uuid,
+        update: &'arg UserUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'arg>>;
+
+    fn delete_user_by_id<'id>(
         &self,
-        id: &Uuid,
-    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn add_tag_to_user(
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>>;
+
+    fn add_tag_to_user<'arg>(
         &self,
-        user_id: &Uuid,
-        tag: &Tag,
-    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn remove_tag_from_user(
+        user_id: &'arg Uuid,
+        tag: &'arg Tag,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'arg>>;
+
+    fn remove_tag_from_user<'arg>(
         &self,
-        user_id: &Uuid,
-        tag: &Tag,
-    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn get_users_by_tag_id(
+        user_id: &'arg Uuid,
+        tag: &'arg Tag,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'arg>>;
+
+    fn get_users_by_tag_id<'id>(
         &self,
-        tag_id: &Uuid,
-    ) -> impl Future<Output = Result<Vec<User>, DatabaseError>> + Send;
+        tag_id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<User>, DatabaseError>> + Send + 'id>>;
 
     // Tag repository
-    fn create_tag(&self, tag: &Tag) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn get_tag_by_id(&self, id: &Uuid) -> impl Future<Output = Result<Tag, DatabaseError>> + Send;
-    fn get_tag_by_name(
+
+    fn create_tag<'tag>(&self, tag: &'tag Tag) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'tag>>;
+
+    fn get_tag_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'id>>;
+
+    fn get_tag_by_name<'name>(
         &self,
-        name: &str,
-    ) -> impl Future<Output = Result<Tag, DatabaseError>> + Send;
-    fn update_tag(
+        name: &'name str,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'name>>;
+
+    fn update_tag<'arg>(
         &self,
-        id: &Uuid,
-        update: &TagUpdate,
-    ) -> impl Future<Output = Result<Tag, DatabaseError>> + Send;
-    fn delete_tag_by_id(&self, id: &Uuid)
-    -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn get_tags_by_user_id(
+        id: &'arg Uuid,
+        update: &'arg TagUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'arg>>;
+
+    fn delete_tag_by_id<'id>(
         &self,
-        user_id: &Uuid,
-    ) -> impl Future<Output = Result<Vec<Tag>, DatabaseError>> + Send;
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>>;
+
+    fn get_tags_by_user_id<'id>(
+        &self,
+        user_id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Tag>, DatabaseError>> + Send + 'id>>;
 
     // Passkey repository
-    fn create_passkey(
+
+    fn create_passkey<'key>(
         &self,
-        passkey: &PasskeyCredential,
-    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn get_passkey_by_id(
+        passkey: &'key PasskeyCredential,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'key>>;
+
+    fn get_passkey_by_id<'id>(
         &self,
-        id: &Uuid,
-    ) -> impl Future<Output = Result<PasskeyCredential, DatabaseError>> + Send;
-    fn get_passkey_by_credential_id(
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>>;
+
+    fn get_passkey_by_credential_id<'id>(
         &self,
-        credential_id: &[u8],
-    ) -> impl Future<Output = Result<PasskeyCredential, DatabaseError>> + Send;
-    fn get_passkeys_by_user_id(
+        credential_id: &'id [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>>;
+
+    fn get_passkeys_by_user_id<'id>(
         &self,
-        user_id: &Uuid,
-    ) -> impl Future<Output = Result<Vec<PasskeyCredential>, DatabaseError>> + Send;
-    fn update_passkey(
+        user_id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<PasskeyCredential>, DatabaseError>> + Send + 'id>>;
+
+    fn update_passkey<'key>(
         &self,
-        passkey: &PasskeyCredential,
-    ) -> impl Future<Output = Result<PasskeyCredential, DatabaseError>> + Send;
-    fn delete_passkey_by_id(
+        passkey: &'key PasskeyCredential,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'key>>;
+
+    fn delete_passkey_by_id<'id>(
         &self,
-        id: &Uuid,
-    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
-    fn increment_passkey_sign_count(
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>>;
+
+    fn increment_passkey_sign_count<'id>(
         &self,
-        id: &Uuid,
-    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>>;
+
 }
 
 /// Error type for database operations
