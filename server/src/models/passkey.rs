@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct PasskeyCredential {
     id: Uuid,
     user_id: Uuid,
+    display_name: String,
     credential_id: Vec<u8>,
     public_key: Vec<u8>,
     sign_count: u32,
@@ -14,38 +15,6 @@ pub struct PasskeyCredential {
 }
 
 impl PasskeyCredential {
-    pub fn new(user_id: Uuid, credential_id: Vec<u8>, public_key: Vec<u8>) -> Self {
-        Self {
-            id: super::new_uuid(),
-            user_id,
-            credential_id,
-            public_key,
-            sign_count: 0,
-            created_at: chrono::Utc::now(),
-            last_used_at: None,
-        }
-    }
-
-    pub fn new_full(
-        id: Uuid,
-        user_id: Uuid,
-        credential_id: Vec<u8>,
-        public_key: Vec<u8>,
-        sign_count: u32,
-        created_at: chrono::DateTime<chrono::Utc>,
-        last_used_at: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Self {
-        Self {
-            id,
-            user_id,
-            credential_id,
-            public_key,
-            sign_count,
-            created_at,
-            last_used_at,
-        }
-    }
-
     #[must_use]
     pub fn id(&self) -> &Uuid {
         &self.id
@@ -79,5 +48,29 @@ impl PasskeyCredential {
     #[must_use]
     pub fn last_used_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         self.last_used_at
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PasskeyCredentialUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+impl PasskeyCredentialUpdate {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn with_display_name(mut self, display_name: String) -> Self {
+        self.display_name = Some(display_name);
+        self
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.display_name.is_none()
     }
 }

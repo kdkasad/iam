@@ -24,39 +24,6 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(email: String, display_name: String) -> Self {
-        let now = chrono::Utc::now();
-        Self {
-            id: super::new_uuid(),
-            email,
-            display_name,
-            created_at: now,
-            updated_at: now,
-            tags: None,
-            passkeys: None,
-        }
-    }
-
-    pub fn new_full(
-        id: Uuid,
-        email: String,
-        display_name: String,
-        created_at: chrono::DateTime<chrono::Utc>,
-        updated_at: chrono::DateTime<chrono::Utc>,
-        tags: Option<Vec<Tag>>,
-        passkeys: Option<Vec<PasskeyCredential>>,
-    ) -> Self {
-        Self {
-            id,
-            email,
-            display_name,
-            created_at,
-            updated_at,
-            tags,
-            passkeys,
-        }
-    }
-
     #[must_use]
     pub fn id(&self) -> &Uuid {
         &self.id
@@ -118,7 +85,7 @@ impl User {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserUpdate {
     pub email: Option<String>,
     pub display_name: Option<String>,

@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     db::interface::{DatabaseClient, DatabaseError},
-    models::{PasskeyCredential, Tag, TagUpdate, User, UserUpdate},
+    models::{PasskeyCredential, PasskeyCredentialUpdate, Tag, TagUpdate, User, UserUpdate},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -70,26 +70,34 @@ impl SqliteClient {
 }
 
 impl DatabaseClient for SqliteClient {
-    fn create_user<'user>(&self, user: &'user User) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'user>> {
+    fn create_user<'user>(
+        &self,
+        id: &'user Uuid,
+        user: &'user UserUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'user>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
-                .bind(user.id())
-                .bind(user.email())
-                .bind(user.display_name())
-                .bind(user.created_at())
-                .bind(user.updated_at())
-                .execute(&pool)
-                .await?;
-            Ok(())
+            Ok(sqlx::query_as::<_, User>(
+                "INSERT INTO users (id, email, display_name, created_at, updated_at)
+                VALUES ($1, $2, $3, unixepoch(), unixepoch())
+                RETURNING id, email, display_name, created_at, updated_at",
+            )
+            .bind(id)
+            .bind(&user.email)
+            .bind(&user.display_name)
+            .fetch_one(&pool)
+            .await?)
         })
     }
 
-    fn get_user_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'id>> {
+    fn get_user_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let user: User = sqlx::query_as(
-                "SELECT id, email, display_name, created_at, updated_at FROM users WHERE id = ?",
+                "SELECT id, email, display_name, created_at, updated_at FROM users WHERE id = $1",
             )
             .bind(id)
             .fetch_one(&pool)
@@ -98,11 +106,14 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn get_user_by_email<'email>(&self, email: &'email str) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'email>> {
+    fn get_user_by_email<'email>(
+        &self,
+        email: &'email str,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'email>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let user: User = sqlx::query_as(
-                "SELECT id, email, display_name, created_at, updated_at FROM users WHERE email = ?",
+                "SELECT id, email, display_name, created_at, updated_at FROM users WHERE email = $1",
             )
             .bind(email)
             .fetch_one(&pool)
@@ -111,7 +122,11 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn update_user<'arg>(&self, id: &'arg Uuid, update: &'arg UserUpdate) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'arg>> {
+    fn update_user<'arg>(
+        &self,
+        id: &'arg Uuid,
+        update: &'arg UserUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'arg>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             if update.is_empty() {
@@ -156,10 +171,13 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn delete_user_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
+    fn delete_user_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("DELETE FROM users WHERE id = ?")
+            sqlx::query("DELETE FROM users WHERE id = $1")
                 .bind(id)
                 .execute(&pool)
                 .await?;
@@ -167,10 +185,14 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn add_tag_to_user<'arg>(&self, user_id: &'arg Uuid, tag: &'arg Tag) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'arg>> {
+    fn add_tag_to_user<'arg>(
+        &self,
+        user_id: &'arg Uuid,
+        tag: &'arg Tag,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'arg>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("INSERT INTO users_tags (user_id, tag_id) VALUES (?, ?)")
+            sqlx::query("INSERT INTO users_tags (user_id, tag_id) VALUES ($1, $2)")
                 .bind(user_id)
                 .bind(tag.id())
                 .execute(&pool)
@@ -179,10 +201,14 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn remove_tag_from_user<'arg>(&self, user_id: &'arg Uuid, tag: &'arg Tag) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'arg>> {
+    fn remove_tag_from_user<'arg>(
+        &self,
+        user_id: &'arg Uuid,
+        tag: &'arg Tag,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'arg>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("DELETE FROM users_tags WHERE user_id = ? AND tag_id = ?")
+            sqlx::query("DELETE FROM users_tags WHERE user_id = $1 AND tag_id = $2")
                 .bind(user_id)
                 .bind(tag.id())
                 .execute(&pool)
@@ -191,7 +217,10 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn get_users_by_tag_id<'id>(&self, tag_id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<Vec<User>, DatabaseError>> + Send + 'id>> {
+    fn get_users_by_tag_id<'id>(
+        &self,
+        tag_id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<User>, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let users: Vec<User> = sqlx::query_as(
@@ -199,7 +228,7 @@ impl DatabaseClient for SqliteClient {
                  FROM users u
                  INNER JOIN users_tags ut
                  ON u.id = ut.user_id
-                 WHERE ut.tag_id = ?",
+                 WHERE ut.tag_id = $1",
             )
             .bind(tag_id)
             .fetch_all(&pool)
@@ -208,43 +237,60 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn create_tag<'tag>(&self, tag: &'tag Tag) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'tag>> {
+    fn create_tag<'tag>(
+        &self,
+        id: &'tag Uuid,
+        tag: &'tag TagUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'tag>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("INSERT INTO tags (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)")
-                .bind(tag.id())
-                .bind(tag.name())
-                .bind(tag.created_at())
-                .bind(tag.updated_at())
-                .execute(&pool)
-                .await?;
-            Ok(())
+            Ok(sqlx::query_as::<_, Tag>(
+                "INSERT INTO tags (id, name, created_at, updated_at)
+            VALUES ($1, $2, unixepoch(), unixepoch())
+            RETURNING id, name, created_at, updated_at",
+            )
+            .bind(&id)
+            .bind(&tag.name)
+            .fetch_one(&pool)
+            .await?)
         })
     }
 
-    fn get_tag_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'id>> {
+    fn get_tag_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            let tag: Tag = sqlx::query_as("SELECT id, name, created_at, updated_at FROM tags WHERE id = ?")
-                .bind(id)
-                .fetch_one(&pool)
-                .await?;
+            let tag: Tag =
+                sqlx::query_as("SELECT id, name, created_at, updated_at FROM tags WHERE id = $1")
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await?;
             Ok(tag)
         })
     }
 
-    fn get_tag_by_name<'name>(&self, name: &'name str) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'name>> {
+    fn get_tag_by_name<'name>(
+        &self,
+        name: &'name str,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'name>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            let tag: Tag = sqlx::query_as("SELECT id, name, created_at, updated_at FROM tags WHERE name = ?")
-                .bind(name)
-                .fetch_one(&pool)
-                .await?;
+            let tag: Tag =
+                sqlx::query_as("SELECT id, name, created_at, updated_at FROM tags WHERE name = $1")
+                    .bind(name)
+                    .fetch_one(&pool)
+                    .await?;
             Ok(tag)
         })
     }
 
-    fn update_tag<'arg>(&self, id: &'arg Uuid, update: &'arg TagUpdate) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'arg>> {
+    fn update_tag<'arg>(
+        &self,
+        id: &'arg Uuid,
+        update: &'arg TagUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'arg>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             if update.is_empty() {
@@ -263,7 +309,7 @@ impl DatabaseClient for SqliteClient {
             query_parts.push("updated_at = unixepoch()");
 
             let query = format!(
-                "UPDATE tags SET {} WHERE id = ? RETURNING id, name, created_at, updated_at",
+                "UPDATE tags SET {} WHERE id = $1 RETURNING id, name, created_at, updated_at",
                 query_parts.join(", ")
             );
 
@@ -280,10 +326,13 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn delete_tag_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
+    fn delete_tag_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("DELETE FROM tags WHERE id = ?")
+            sqlx::query("DELETE FROM tags WHERE id = $1")
                 .bind(id)
                 .execute(&pool)
                 .await?;
@@ -291,15 +340,18 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn get_tags_by_user_id<'id>(&self, user_id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<Vec<Tag>, DatabaseError>> + Send + 'id>> {
+    fn get_tags_by_user_id<'id>(
+        &self,
+        user_id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Tag>, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let tags: Vec<Tag> = sqlx::query_as(
-                "SELECT t.id, t.name, t.created_at, t.updated_at \
-                 FROM tags t \
-                 INNER JOIN users_tags ut \
-                 ON t.id = ut.tag_id \
-                 WHERE ut.user_id = ?",
+                "SELECT t.id, t.name, t.created_at, t.updated_at
+                 FROM tags t
+                 INNER JOIN users_tags ut
+                 ON t.id = ut.tag_id
+                 WHERE ut.user_id = $1",
             )
             .bind(user_id)
             .fetch_all(&pool)
@@ -308,12 +360,15 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn create_passkey<'key>(&self, passkey: &'key PasskeyCredential) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'key>> {
+    fn create_passkey<'key>(
+        &self,
+        passkey: &'key PasskeyCredential,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'key>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             sqlx::query(
                 "INSERT INTO passkeys (id, user_id, credential_id, public_key, sign_count, created_at, last_used_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
             )
             .bind(passkey.id())
             .bind(passkey.user_id())
@@ -328,12 +383,15 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn get_passkey_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>> {
+    fn get_passkey_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let passkey: PasskeyCredential = sqlx::query_as(
                 "SELECT id, user_id, credential_id, public_key, sign_count, created_at, last_used_at
-                 FROM passkeys WHERE id = ?",
+                 FROM passkeys WHERE id = $1",
             )
             .bind(id)
             .fetch_one(&pool)
@@ -342,12 +400,15 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn get_passkey_by_credential_id<'id>(&self, credential_id: &'id [u8]) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>> {
+    fn get_passkey_by_credential_id<'id>(
+        &self,
+        credential_id: &'id [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let passkey: PasskeyCredential = sqlx::query_as(
                 "SELECT id, user_id, credential_id, public_key, sign_count, created_at, last_used_at
-                 FROM passkeys WHERE credential_id = ?",
+                 FROM passkeys WHERE credential_id = $1",
             )
             .bind(credential_id)
             .fetch_one(&pool)
@@ -356,12 +417,16 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn get_passkeys_by_user_id<'id>(&self, user_id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<Vec<PasskeyCredential>, DatabaseError>> + Send + 'id>> {
+    fn get_passkeys_by_user_id<'id>(
+        &self,
+        user_id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<PasskeyCredential>, DatabaseError>> + Send + 'id>>
+    {
         let pool = self.pool.clone();
         Box::pin(async move {
             let passkeys: Vec<PasskeyCredential> = sqlx::query_as(
                 "SELECT id, user_id, credential_id, public_key, sign_count, created_at, last_used_at
-                 FROM passkeys WHERE user_id = ?",
+                 FROM passkeys WHERE user_id = $1",
             )
             .bind(user_id)
             .fetch_all(&pool)
@@ -370,29 +435,37 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn update_passkey<'key>(&self, passkey: &'key PasskeyCredential) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'key>> {
+    fn update_passkey<'key>(
+        &self,
+        id: &'key Uuid,
+        passkey: &'key PasskeyCredentialUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'key>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query(
-                "UPDATE passkeys SET user_id = ?, credential_id = ?, public_key = ?, sign_count = ?, last_used_at = ?
-                 WHERE id = ?",
+            if passkey.is_empty() {
+                return Err(DatabaseError::EmptyUpdate);
+            }
+
+            // There's only one updatable field, so we can just unwrap it
+            let passkey: PasskeyCredential = sqlx::query_as(
+                "UPDATE passkeys SET display_name = $1 WHERE id = $2
+                RETURNING id, user_id, credential_id, public_key, sign_count, created_at, last_used_at",
             )
-            .bind(passkey.user_id())
-            .bind(passkey.credential_id())
-            .bind(passkey.public_key())
-            .bind(passkey.sign_count())
-            .bind(passkey.last_used_at())
-            .bind(passkey.id())
-            .execute(&pool)
+            .bind(passkey.display_name.as_ref().unwrap())
+            .bind(id)
+            .fetch_one(&pool)
             .await?;
-            Ok(passkey.clone())
+            Ok(passkey)
         })
     }
 
-    fn delete_passkey_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
+    fn delete_passkey_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("DELETE FROM passkeys WHERE id = ?")
+            sqlx::query("DELETE FROM passkeys WHERE id = $1")
                 .bind(id)
                 .execute(&pool)
                 .await?;
@@ -400,10 +473,13 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn increment_passkey_sign_count<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
+    fn increment_passkey_sign_count<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("UPDATE passkeys SET sign_count = sign_count + 1, last_used_at = unixepoch() WHERE id = ?")
+            sqlx::query("UPDATE passkeys SET sign_count = sign_count + 1, last_used_at = unixepoch() WHERE id = $1")
                 .bind(id)
                 .execute(&pool)
                 .await?;

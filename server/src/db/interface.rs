@@ -2,15 +2,21 @@ use std::{borrow::Cow, future::Future, pin::Pin};
 
 use uuid::Uuid;
 
-use crate::models::{PasskeyCredential, Tag, TagUpdate, User, UserUpdate};
+use crate::models::{PasskeyCredential, PasskeyCredentialUpdate, Tag, TagUpdate, User, UserUpdate};
 
 pub trait DatabaseClient: Send + Sync + 'static {
-
     // User repository
 
-    fn create_user<'user>(&self, user: &'user User) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'user>>;
+    fn create_user<'user>(
+        &self,
+        id: &'user Uuid,
+        user: &'user UserUpdate
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'user>>;
 
-    fn get_user_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'id>>;
+    fn get_user_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'id>>;
 
     fn get_user_by_email<'email>(
         &self,
@@ -47,9 +53,16 @@ pub trait DatabaseClient: Send + Sync + 'static {
 
     // Tag repository
 
-    fn create_tag<'tag>(&self, tag: &'tag Tag) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'tag>>;
+    fn create_tag<'tag>(
+        &self,
+        id: &'tag Uuid,
+        tag: &'tag TagUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'tag>>;
 
-    fn get_tag_by_id<'id>(&self, id: &'id Uuid) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'id>>;
+    fn get_tag_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Tag, DatabaseError>> + Send + 'id>>;
 
     fn get_tag_by_name<'name>(
         &self,
@@ -96,7 +109,8 @@ pub trait DatabaseClient: Send + Sync + 'static {
 
     fn update_passkey<'key>(
         &self,
-        passkey: &'key PasskeyCredential,
+        id: &'key Uuid,
+        passkey: &'key PasskeyCredentialUpdate,
     ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'key>>;
 
     fn delete_passkey_by_id<'id>(
@@ -108,7 +122,6 @@ pub trait DatabaseClient: Send + Sync + 'static {
         &self,
         id: &'id Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>>;
-
 }
 
 /// Error type for database operations

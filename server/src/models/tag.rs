@@ -20,33 +20,6 @@ pub struct Tag {
 }
 
 impl Tag {
-    pub fn new(name: String) -> Self {
-        let now = chrono::Utc::now();
-        Self {
-            id: super::new_uuid(),
-            name,
-            created_at: now,
-            updated_at: now,
-            users: None,
-        }
-    }
-
-    pub fn new_full(
-        id: Uuid,
-        name: String,
-        created_at: chrono::DateTime<chrono::Utc>,
-        updated_at: chrono::DateTime<chrono::Utc>,
-        users: Option<Vec<User>>,
-    ) -> Self {
-        Self {
-            id,
-            name,
-            created_at,
-            updated_at,
-            users,
-        }
-    }
-
     #[must_use]
     pub fn id(&self) -> &Uuid {
         &self.id

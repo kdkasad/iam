@@ -4,7 +4,7 @@ mod passkey;
 mod tag;
 mod user;
 
-pub use passkey::PasskeyCredential;
+pub use passkey::{PasskeyCredential, PasskeyCredentialUpdate};
 pub use tag::{Tag, TagUpdate};
 pub use user::{User, UserUpdate};
 
