@@ -53,10 +53,10 @@ impl User {
         self.tags.as_deref().ok_or(ErrNotPopulated)
     }
 
-    pub async fn fetch_tags<C>(&mut self, client: C) -> Result<&[Tag], DatabaseError>
-    where
-        C: DatabaseClient,
-    {
+    pub async fn fetch_tags(
+        &mut self,
+        client: &dyn DatabaseClient,
+    ) -> Result<&[Tag], DatabaseError> {
         match self.tags {
             Some(ref tags) => Ok(tags),
             None => {
@@ -67,13 +67,10 @@ impl User {
         }
     }
 
-    pub async fn fetch_passkeys<C>(
+    pub async fn fetch_passkeys(
         &mut self,
-        client: C,
-    ) -> Result<&[PasskeyCredential], DatabaseError>
-    where
-        C: DatabaseClient,
-    {
+        client: &dyn DatabaseClient,
+    ) -> Result<&[PasskeyCredential], DatabaseError> {
         match self.passkeys {
             Some(ref passkeys) => Ok(passkeys),
             None => {
