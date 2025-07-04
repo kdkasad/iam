@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt().init();
+
     // Build our application with a route
     let app = Router::new().route("/api/v1/health", get(health_check));
 

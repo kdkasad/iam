@@ -17,3 +17,4 @@ uuid = { version = "1.17.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.41", features = ["serde"] }
 thiserror = "2.0.12"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "migrate", "uuid", "chrono"] }
+tracing-subscriber = "0.3.19"
