@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
-    http::StatusCode, response::{IntoResponse, Response}, routing::{get, post}, Router
+    Router,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
 };
 
 use crate::db::interface::{DatabaseClient, DatabaseError};

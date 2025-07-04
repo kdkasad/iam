@@ -10,7 +10,7 @@ pub trait DatabaseClient: Send + Sync + 'static {
     fn create_user<'user>(
         &self,
         id: &'user Uuid,
-        user: &'user UserUpdate
+        user: &'user UserUpdate,
     ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'user>>;
 
     fn get_user_by_id<'id>(
