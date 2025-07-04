@@ -1,20 +1,20 @@
-use axum::{Router, routing::get};
-use std::net::SocketAddr;
+use iam_server::{api::ApiServer, db::clients::sqlite::SqliteClient};
+use std::process::ExitCode;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     tracing_subscriber::fmt().init();
 
-    // Build our application with a route
-    let app = Router::new().route("/api/v1/health", get(health_check));
+    let db = match SqliteClient::open().await {
+        Ok(db) => db,
+        Err(err) => {
+            tracing::error!("failed to open database: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
 
-    // Run it
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::info!("listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
-}
+    let api = ApiServer::new(db);
+    api.serve().await.unwrap();
 
-async fn health_check() -> &'static str {
-    "OK"
+    ExitCode::SUCCESS
 }
