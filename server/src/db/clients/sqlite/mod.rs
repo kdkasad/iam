@@ -36,7 +36,12 @@ impl SqliteClient {
     pub async fn open() -> Result<Self, CreateSqliteClientError> {
         match std::env::var("DB_PATH") {
             Ok(path) => Ok(Self {
-                pool: Self::do_open(&path).await?,
+                pool: Self::do_open(
+                    SqliteConnectOptions::new()
+                        .create_if_missing(true)
+                        .filename(&path),
+                )
+                .await?,
             }),
             Err(VarError::NotPresent) => Err(CreateSqliteClientError::MissingEnv("DB_PATH")),
             Err(VarError::NotUnicode(_)) => Err(CreateSqliteClientError::EnvNotUtf8("DB_PATH")),
@@ -45,21 +50,21 @@ impl SqliteClient {
 
     /// Creates a client that uses a new in-memory database.
     pub async fn new_memory() -> Result<Self, CreateSqliteClientError> {
+        // sqlx has some special handling for the in-memory database which only
+        // happens when parsing from a URL string
         Ok(Self {
-            pool: Self::do_open(":memory:").await?,
+            pool: Self::do_open("sqlite://:memory:".parse().unwrap()).await?,
         })
     }
 
-    async fn do_open(path: &str) -> Result<SqlitePool, CreateSqliteClientError> {
-        let pool = SqlitePool::connect_with(
-            SqliteConnectOptions::new()
-                .synchronous(SqliteSynchronous::Normal)
-                .create_if_missing(true)
-                .optimize_on_close(true, None)
-                .pragma("foreign_keys", "ON")
-                .filename(path),
-        )
-        .await?;
+    async fn do_open(
+        base_options: SqliteConnectOptions,
+    ) -> Result<SqlitePool, CreateSqliteClientError> {
+        let options = base_options
+            .synchronous(SqliteSynchronous::Normal)
+            .optimize_on_close(true, None)
+            .pragma("foreign_keys", "ON");
+        let pool = SqlitePool::connect_with(options).await?;
 
         sqlx::migrate!("src/db/clients/sqlite/migrations")
             .run(&pool)
@@ -249,7 +254,7 @@ impl DatabaseClient for SqliteClient {
             VALUES ($1, $2, unixepoch(), unixepoch())
             RETURNING id, name, created_at, updated_at",
             )
-            .bind(&id)
+            .bind(id)
             .bind(&tag.name)
             .fetch_one(&pool)
             .await?)
@@ -485,5 +490,35 @@ impl DatabaseClient for SqliteClient {
                 .await?;
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::SqliteClient;
+    use crate::{db::interface::DatabaseClient, models::UserUpdate};
+
+    async fn get_client() -> SqliteClient {
+        SqliteClient::new_memory()
+            .await
+            .expect("expected client creation to succeed")
+    }
+
+    #[tokio::test]
+    async fn test_create_user() {
+        let client = get_client().await;
+        let user = client
+            .create_user(
+                &Uuid::new_v4(),
+                &UserUpdate::new()
+                    .with_email("test@example.com".to_string())
+                    .with_display_name("Test User".to_string()),
+            )
+            .await
+            .expect("expected user creation to succeed");
+        assert_eq!(user.email(), "test@example.com");
+        assert_eq!(user.display_name(), "Test User");
     }
 }
