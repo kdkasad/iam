@@ -6,21 +6,40 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use tower_http::cors::CorsLayer;
+use webauthn_rs::Webauthn;
 
 use crate::db::interface::{DatabaseClient, DatabaseError};
 
+mod auth;
 mod user;
 
-/// Returns a sub-router for `/api/v1`
-pub fn router() -> Router<Arc<dyn DatabaseClient>> {
-    let router_public = Router::new().route("/health", get(async || ()));
+struct V1StateInner {
+    db: Arc<dyn DatabaseClient>,
+    webauthn: Webauthn,
+}
 
-    let router_authenticated = Router::new()
+type V1State = Arc<V1StateInner>;
+
+/// Returns a sub-router for `/api/v1`
+pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn) -> Router<()> {
+    let router_public: Router<V1State> = Router::new()
+        .route("/health", get(async || ()))
+        .layer(CorsLayer::permissive());
+
+    let router_authenticated: Router<V1State> = Router::new()
         .route("/users/{id}", get(user::get_user))
         .route("/users", post(user::post_user));
-    // ApiRouter::new().api_route("/users/{id}", get(user::get_user));
 
-    router_public.merge(router_authenticated)
+    let router_unauthenticated: Router<V1State> = Router::new()
+        .route("/register/start", post(auth::start_registration))
+        .route("/register/finish", post(auth::finish_registration));
+
+    let state = V1StateInner { db, webauthn };
+    router_public
+        .merge(router_authenticated)
+        .merge(router_unauthenticated)
+        .with_state(Arc::new(state))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -28,8 +47,14 @@ enum ApiV1Error {
     #[error("Not found")]
     NotFound,
 
+    #[error("WebAuthn error: {0}")]
+    WebAuthn(#[from] webauthn_rs::prelude::WebauthnError),
+
     #[error("Internal server error: {0}")]
     InternalServerError(Box<dyn std::error::Error>),
+
+    #[error("Invalid or missing registration ID")]
+    InvalidRegistrationId,
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -43,9 +68,11 @@ impl From<DatabaseError> for ApiV1Error {
 
 impl IntoResponse for ApiV1Error {
     fn into_response(self) -> Response {
+        use ApiV1Error::*;
         let status = match self {
-            ApiV1Error::NotFound => StatusCode::NOT_FOUND,
-            ApiV1Error::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            NotFound => StatusCode::NOT_FOUND,
+            WebAuthn(_) | InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            InvalidRegistrationId => StatusCode::BAD_REQUEST,
         };
         (status, self.to_string()).into_response()
     }

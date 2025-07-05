@@ -110,3 +110,9 @@ impl UserUpdate {
         self.email.is_none() && self.display_name.is_none()
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct UserCreate {
+    pub email: String,
+    pub display_name: String,
+}

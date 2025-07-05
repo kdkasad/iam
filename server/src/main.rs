@@ -1,11 +1,14 @@
 use axum::Router;
 use iam_server::{api::new_api_router, db::clients::sqlite::SqliteClient, ui::new_ui_server};
-use std::{path::PathBuf, process::ExitCode};
+use std::{env::VarError, ffi::OsString, path::PathBuf, process::ExitCode};
 use tokio::net::TcpListener;
 use tracing::{error, warn};
+use webauthn_rs::{WebauthnBuilder, prelude::Url};
 
 mod vars {
     pub const STATIC_DIR: &str = "STATIC_DIR";
+    pub const DOMAIN: &str = "DOMAIN";
+    pub const SERVER_NAME: &str = "SERVER_NAME";
 }
 
 mod defaults {
@@ -17,39 +20,89 @@ mod defaults {
 async fn main() -> ExitCode {
     tracing_subscriber::fmt().init();
 
-    let db = match SqliteClient::open().await {
-        Ok(db) => db,
+    // Create database client
+    let db = SqliteClient::open().await.unwrap_or_exit(|err| {
+        error!("failed to open database: {err}");
+    });
+
+    // Create WebAuthn client
+    let domain = getenv_or_exit(vars::DOMAIN);
+    let origin = match Url::parse(&format!("https://{domain}")) {
+        Ok(origin) => origin,
         Err(err) => {
-            tracing::error!("failed to open database: {err}");
+            error!("failed to create URL from given origin: {err}");
             return ExitCode::FAILURE;
         }
     };
+    let webauthn = WebauthnBuilder::new(&domain, &origin)
+        .unwrap()
+        .rp_name(
+            std::env::var(vars::SERVER_NAME)
+                .as_ref()
+                .unwrap_or_else(|err| match err {
+                    VarError::NotPresent => {
+                        warn!(
+                            "{} is not set; defaulting to {}",
+                            vars::SERVER_NAME,
+                            &domain
+                        );
+                        &domain
+                    }
+                    VarError::NotUnicode(os_string) => {
+                        error!("{} is not valid UTF-8: {os_string:?}", vars::SERVER_NAME);
+                        std::process::exit(1);
+                    }
+                }),
+        )
+        .build()
+        .unwrap_or_exit(|err| error!("failed to build WebAuthn manager: {err}"));
 
-    let api = new_api_router(db);
+    let api = new_api_router(db, webauthn);
 
-    let static_dir = match std::env::var_os(vars::STATIC_DIR) {
-        Some(dir) => PathBuf::from(dir),
-        None => {
-            let path = PathBuf::from(defaults::STATIC_DIR);
-            warn!("STATIC_DIR not set; using default of {}", path.display());
-            path
-        }
-    };
+    let static_dir = PathBuf::from(std::env::var_os(vars::STATIC_DIR).unwrap_or_else(|| {
+        warn!(
+            "{} is not set; using default of {}",
+            vars::STATIC_DIR,
+            defaults::STATIC_DIR
+        );
+        OsString::from(defaults::STATIC_DIR)
+    }));
     let ui = new_ui_server(&static_dir);
 
     let router = Router::new().nest("/api", api).nest_service("/ui", ui);
 
-    let listener = match TcpListener::bind(defaults::LISTEN_ADDR).await {
-        Ok(l) => l,
-        Err(err) => {
+    let listener = TcpListener::bind(defaults::LISTEN_ADDR)
+        .await
+        .unwrap_or_exit(|err| {
             error!("failed to listen on {}: {err}", defaults::LISTEN_ADDR);
-            return ExitCode::FAILURE;
-        }
-    };
-    if let Err(err) = axum::serve(listener, router).await {
+        });
+    axum::serve(listener, router).await.unwrap_or_exit(|err| {
         error!("failed to start server: {err}");
-        return ExitCode::FAILURE;
-    }
+    });
 
     ExitCode::SUCCESS
+}
+
+/// Calls [`std::env::var(name)`][std::env::var] and if that fails, exits the program after printing an error message.
+fn getenv_or_exit(name: &str) -> String {
+    std::env::var(name).unwrap_or_exit(|_| {
+        error!("{name} is not set");
+    })
+}
+
+trait UnwrapOrExit<T, E> {
+    /// Unwraps the result, or calls the given function with the error and exits the program with an exit code of 1.
+    fn unwrap_or_exit(self, f: impl FnOnce(E)) -> T;
+}
+
+impl<T, E> UnwrapOrExit<T, E> for Result<T, E> {
+    fn unwrap_or_exit(self, f: impl FnOnce(E)) -> T {
+        match self {
+            Ok(value) => value,
+            Err(err) => {
+                f(err);
+                std::process::exit(1);
+            }
+        }
+    }
 }

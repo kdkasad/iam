@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Json,
     extract::{Path, State},
@@ -7,25 +5,24 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    api::v1::ApiV1Error,
-    db::interface::DatabaseClient,
-    models::{User, UserUpdate},
+    api::v1::{ApiV1Error, V1State},
+    models::{User, UserCreate},
 };
 
 pub async fn get_user(
     Path(id): Path<Uuid>,
-    State(db): State<Arc<dyn DatabaseClient>>,
+    State(state): State<V1State>,
 ) -> Result<Json<User>, ApiV1Error> {
-    let mut user = db.get_user_by_id(&id).await?;
-    user.fetch_passkeys(db.as_ref()).await?;
-    user.fetch_tags(db.as_ref()).await?;
+    let mut user = state.db.get_user_by_id(&id).await?;
+    user.fetch_passkeys(state.db.as_ref()).await?;
+    user.fetch_tags(state.db.as_ref()).await?;
     Ok(Json(user))
 }
 
 pub async fn post_user(
-    State(db): State<Arc<dyn DatabaseClient>>,
-    Json(user): Json<UserUpdate>,
+    State(state): State<V1State>,
+    Json(user): Json<UserCreate>,
 ) -> Result<Json<User>, ApiV1Error> {
     let id = Uuid::new_v4();
-    Ok(Json(db.create_user(&id, &user).await?))
+    Ok(Json(state.db.create_user(&id, &user).await?))
 }

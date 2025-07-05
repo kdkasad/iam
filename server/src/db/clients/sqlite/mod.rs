@@ -8,7 +8,10 @@ use uuid::Uuid;
 
 use crate::{
     db::interface::{DatabaseClient, DatabaseError},
-    models::{PasskeyCredential, PasskeyCredentialUpdate, Tag, TagUpdate, User, UserUpdate},
+    models::{
+        NewPasskeyCredential, PasskeyCredential, PasskeyCredentialUpdate, PasskeyRegistrationState,
+        Tag, TagUpdate, User, UserCreate, UserUpdate,
+    },
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -78,7 +81,7 @@ impl DatabaseClient for SqliteClient {
     fn create_user<'user>(
         &self,
         id: &'user Uuid,
-        user: &'user UserUpdate,
+        user: &'user UserCreate,
     ) -> Pin<Box<dyn Future<Output = Result<User, DatabaseError>> + Send + 'user>> {
         let pool = self.pool.clone();
         Box::pin(async move {
@@ -365,26 +368,25 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn create_passkey<'key>(
+    fn create_passkey<'a>(
         &self,
-        passkey: &'key PasskeyCredential,
-    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'key>> {
+        id: &'a Uuid,
+        user_id: &'a Uuid,
+        passkey: &'a NewPasskeyCredential,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'a>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query(
-                "INSERT INTO passkeys (id, user_id, credential_id, public_key, sign_count, created_at, last_used_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            let passkey: PasskeyCredential = sqlx::query_as(
+                "INSERT INTO passkeys (id, user_id, passkey, created_at, last_used_at)
+                 VALUES ($1, $2, $3, unixepoch(), unixepoch())
+                 RETURNING *",
             )
-            .bind(passkey.id())
-            .bind(passkey.user_id())
-            .bind(passkey.credential_id())
-            .bind(passkey.public_key())
-            .bind(passkey.sign_count())
-            .bind(passkey.created_at())
-            .bind(passkey.last_used_at())
-            .execute(&pool)
+            .bind(id)
+            .bind(user_id)
+            .bind(sqlx::types::Json(&passkey.passkey))
+            .fetch_one(&pool)
             .await?;
-            Ok(())
+            Ok(passkey)
         })
     }
 
@@ -395,27 +397,10 @@ impl DatabaseClient for SqliteClient {
         let pool = self.pool.clone();
         Box::pin(async move {
             let passkey: PasskeyCredential = sqlx::query_as(
-                "SELECT id, user_id, credential_id, public_key, sign_count, created_at, last_used_at
+                "SELECT *
                  FROM passkeys WHERE id = $1",
             )
             .bind(id)
-            .fetch_one(&pool)
-            .await?;
-            Ok(passkey)
-        })
-    }
-
-    fn get_passkey_by_credential_id<'id>(
-        &self,
-        credential_id: &'id [u8],
-    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let passkey: PasskeyCredential = sqlx::query_as(
-                "SELECT id, user_id, credential_id, public_key, sign_count, created_at, last_used_at
-                 FROM passkeys WHERE credential_id = $1",
-            )
-            .bind(credential_id)
             .fetch_one(&pool)
             .await?;
             Ok(passkey)
@@ -430,10 +415,29 @@ impl DatabaseClient for SqliteClient {
         let pool = self.pool.clone();
         Box::pin(async move {
             let passkeys: Vec<PasskeyCredential> = sqlx::query_as(
-                "SELECT id, user_id, credential_id, public_key, sign_count, created_at, last_used_at
+                "SELECT *
                  FROM passkeys WHERE user_id = $1",
             )
             .bind(user_id)
+            .fetch_all(&pool)
+            .await?;
+            Ok(passkeys)
+        })
+    }
+
+    fn get_passkeys_by_user_email<'email>(
+        &self,
+        email: &'email str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<PasskeyCredential>, DatabaseError>> + Send + 'email>>
+    {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            let passkeys: Vec<PasskeyCredential> = sqlx::query_as(
+                "SELECT * FROM passkeys
+                INNER JOIN users ON passkeys.user_id = users.id
+                WHERE users.email = $1",
+            )
+            .bind(email)
             .fetch_all(&pool)
             .await?;
             Ok(passkeys)
@@ -452,14 +456,12 @@ impl DatabaseClient for SqliteClient {
             }
 
             // There's only one updatable field, so we can just unwrap it
-            let passkey: PasskeyCredential = sqlx::query_as(
-                "UPDATE passkeys SET display_name = $1 WHERE id = $2
-                RETURNING id, user_id, credential_id, public_key, sign_count, created_at, last_used_at",
-            )
-            .bind(passkey.display_name.as_ref().unwrap())
-            .bind(id)
-            .fetch_one(&pool)
-            .await?;
+            let passkey: PasskeyCredential =
+                sqlx::query_as("UPDATE passkeys SET display_name = $1 WHERE id = $2 RETURNING *")
+                    .bind(passkey.display_name.as_ref().unwrap())
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await?;
             Ok(passkey)
         })
     }
@@ -491,34 +493,131 @@ impl DatabaseClient for SqliteClient {
             Ok(())
         })
     }
+
+    fn create_passkey_registration<'a>(
+        &self,
+        registration: &'a PasskeyRegistrationState,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            sqlx::query(
+                "INSERT INTO passkey_registrations (id, user_id, email, registration, created_at)
+                VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(registration.id)
+            .bind(registration.user_id)
+            .bind(&registration.email)
+            .bind(&registration.registration)
+            .bind(registration.created_at.timestamp())
+            .execute(&pool)
+            .await?;
+            Ok(())
+        })
+    }
+
+    fn get_passkey_registration_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyRegistrationState, DatabaseError>> + Send + 'id>>
+    {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            let registration: PasskeyRegistrationState =
+                sqlx::query_as("SELECT * FROM passkey_registrations WHERE id = $1")
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await?;
+            Ok(registration)
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
+
+    use tokio::sync::OnceCell;
     use uuid::Uuid;
+    use webauthn_rs::{Webauthn, WebauthnBuilder, prelude::Url};
 
     use super::SqliteClient;
-    use crate::{db::interface::DatabaseClient, models::UserUpdate};
+    use crate::{
+        db::interface::DatabaseClient,
+        models::{PasskeyRegistrationState, UserCreate},
+    };
 
-    async fn get_client() -> SqliteClient {
-        SqliteClient::new_memory()
-            .await
-            .expect("expected client creation to succeed")
+    struct Tools {
+        client: &'static SqliteClient,
+        webauthn: &'static Webauthn,
+    }
+
+    async fn tools() -> Tools {
+        static CLIENT: OnceCell<SqliteClient> = OnceCell::const_new();
+        let client = CLIENT
+            .get_or_init(|| async {
+                SqliteClient::new_memory()
+                    .await
+                    .expect("expected client creation to succeed")
+            })
+            .await;
+        static WEBAUTHN: std::sync::OnceLock<Webauthn> = std::sync::OnceLock::new();
+        let webauthn = WEBAUTHN.get_or_init(|| {
+            WebauthnBuilder::new("example.org", &Url::parse("http://example.org").unwrap())
+                .expect("expected webauthn builder creation to succeed")
+                .build()
+                .expect("expected webauthn creation to succeed")
+        });
+        Tools { client, webauthn }
     }
 
     #[tokio::test]
     async fn test_create_user() {
-        let client = get_client().await;
+        let Tools { client, .. } = tools().await;
         let user = client
             .create_user(
                 &Uuid::new_v4(),
-                &UserUpdate::new()
-                    .with_email("test@example.com".to_string())
-                    .with_display_name("Test User".to_string()),
+                &UserCreate {
+                    email: "test@example.com".to_string(),
+                    display_name: "Test User".to_string(),
+                },
             )
             .await
             .expect("expected user creation to succeed");
         assert_eq!(user.email(), "test@example.com");
         assert_eq!(user.display_name(), "Test User");
+    }
+
+    async fn do_create_passkey_registration(id: Uuid) {
+        let Tools { client, webauthn } = tools().await;
+        let (_, reg) = webauthn
+            .start_passkey_registration(Uuid::new_v4(), "test@example.com", "Test User", None)
+            .unwrap();
+        let registration = PasskeyRegistrationState {
+            id,
+            user_id: Uuid::new_v4(),
+            email: "test@example.com".to_string(),
+            registration: sqlx::types::Json(reg),
+            created_at: chrono::Utc::now(),
+        };
+        client
+            .create_passkey_registration(&registration)
+            .await
+            .expect("expected passkey registration creation to succeed");
+    }
+
+    #[tokio::test]
+    async fn test_create_passkey_registration() {
+        let id = Uuid::new_v4();
+        do_create_passkey_registration(id).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_passkey_registration_by_id() {
+        let Tools { client, .. } = tools().await;
+        let id = Uuid::new_v4();
+        do_create_passkey_registration(id).await;
+        client
+            .get_passkey_registration_by_id(&id)
+            .await
+            .expect("expected passkey registration to be found");
     }
 }

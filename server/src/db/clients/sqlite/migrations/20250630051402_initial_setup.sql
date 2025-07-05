@@ -30,13 +30,21 @@ CREATE INDEX users_tags_tag_id_index ON users_tags (tag_id);
 CREATE TABLE passkeys (
     id BLOB PRIMARY KEY,
     user_id BLOB NOT NULL,
-    credential_id BLOB NOT NULL,
-    public_key BLOB NOT NULL,
-    sign_count INTEGER NOT NULL DEFAULT 0,
+    passkey TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     last_used_at INTEGER,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) STRICT;
 
 CREATE INDEX passkeys_user_id_index ON passkeys (user_id);
-CREATE UNIQUE INDEX passkeys_credential_id_index ON passkeys (credential_id);
+
+CREATE TABLE passkey_registrations (
+    id BLOB PRIMARY KEY,
+    user_id BLOB NOT NULL,
+    email TEXT NOT NULL,
+    registration TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+    -- no foreign key because the user may not exist yet
+) STRICT;
+
+CREATE UNIQUE INDEX passkey_registrations_id_index ON passkey_registrations (id);

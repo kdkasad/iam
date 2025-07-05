@@ -1,15 +1,16 @@
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
+use webauthn_rs::prelude::{Passkey, PasskeyRegistration};
+
+pub type WrappedPasskey = sqlx::types::Json<Passkey>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PasskeyCredential {
     id: Uuid,
     user_id: Uuid,
     display_name: String,
-    credential_id: Vec<u8>,
-    public_key: Vec<u8>,
-    sign_count: u32,
+    passkey: WrappedPasskey,
     created_at: chrono::DateTime<chrono::Utc>,
     last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -26,18 +27,12 @@ impl PasskeyCredential {
     }
 
     #[must_use]
-    pub fn credential_id(&self) -> &[u8] {
-        &self.credential_id
+    pub fn passkey(&self) -> &Passkey {
+        &self.passkey
     }
 
-    #[must_use]
-    pub fn public_key(&self) -> &[u8] {
-        &self.public_key
-    }
-
-    #[must_use]
-    pub fn sign_count(&self) -> u32 {
-        self.sign_count
+    pub fn into_passkey(self) -> Passkey {
+        self.passkey.0
     }
 
     #[must_use]
@@ -73,4 +68,19 @@ impl PasskeyCredentialUpdate {
     pub fn is_empty(&self) -> bool {
         self.display_name.is_none()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewPasskeyCredential {
+    pub display_name: String,
+    pub passkey: Passkey,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PasskeyRegistrationState {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub email: String,
+    pub registration: sqlx::types::Json<PasskeyRegistration>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
