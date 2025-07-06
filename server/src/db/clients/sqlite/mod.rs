@@ -89,7 +89,7 @@ impl DatabaseClient for SqliteClient {
             Ok(sqlx::query_as::<_, User>(
                 "INSERT INTO users (id, email, display_name, created_at, updated_at)
                 VALUES ($1, $2, $3, unixepoch(), unixepoch())
-                RETURNING id, email, display_name, created_at, updated_at",
+                RETURNING *",
             )
             .bind(id)
             .bind(&user.email)
@@ -378,13 +378,14 @@ impl DatabaseClient for SqliteClient {
         let pool = self.pool.clone();
         Box::pin(async move {
             let passkey: PasskeyCredential = sqlx::query_as(
-                "INSERT INTO passkeys (id, user_id, passkey, created_at, last_used_at)
-                 VALUES ($1, $2, $3, unixepoch(), unixepoch())
+                "INSERT INTO passkeys (id, user_id, passkey, display_name, created_at, last_used_at)
+                 VALUES ($1, $2, $3, $4, unixepoch(), unixepoch())
                  RETURNING *",
             )
             .bind(id)
             .bind(user_id)
             .bind(sqlx::types::Json(&passkey.passkey))
+            .bind(&passkey.display_name)
             .fetch_one(&pool)
             .await?;
             Ok(passkey)
@@ -614,41 +615,43 @@ impl DatabaseClient for SqliteClient {
 #[cfg(test)]
 mod tests {
 
-    use rand::RngCore;
-    use tokio::sync::OnceCell;
     use uuid::Uuid;
-    use webauthn_rs::{Webauthn, WebauthnBuilder, prelude::Url};
+    use webauthn_rs::{
+        Webauthn, WebauthnBuilder,
+        prelude::{Passkey, Url},
+    };
 
     use super::SqliteClient;
     use crate::{
         db::interface::DatabaseClient,
         models::{
-            EncodableHash, PasskeyRegistrationState, Session, SessionState, User, UserCreate,
+            NewPasskeyCredential, PasskeyRegistrationState, Session, SessionState, UserCreate,
         },
     };
 
     struct Tools {
-        client: &'static SqliteClient,
-        webauthn: &'static Webauthn,
+        client: SqliteClient,
+        webauthn: Webauthn,
     }
 
+    const PASSKEY_JSON: &str = r#"
+    {"cred":{"cred_id":"Gx07kWmVrKBrB31KmXxHSnAK2kI","cred":{"type_":"ES256","key":{"EC_EC2":{"curve":"SECP256R1","x":"k1zbsP39Y1go2_Pea23c5AT2ZuP6NBx67NTZZdjiPUM","y":"qznBgidGVTuHwMohwxJNDRN_gVh1Ipn5mENE2hYXot0"}}},"counter":0,"transports":null,"user_verified":true,"backup_eligible":true,"backup_state":true,"registration_policy":"required","extensions":{"cred_protect":"Ignored","hmac_create_secret":"NotRequested","appid":"NotRequested","cred_props":"Ignored"},"attestation":{"data":"None","metadata":"None"},"attestation_format":"none"}}
+    "#;
+
+    /// Create a new set of tools/clients for a test.
     async fn tools() -> Tools {
-        static CLIENT: OnceCell<SqliteClient> = OnceCell::const_new();
-        let client = CLIENT
-            .get_or_init(|| async {
-                SqliteClient::new_memory()
-                    .await
-                    .expect("expected client creation to succeed")
-            })
-            .await;
-        static WEBAUTHN: std::sync::OnceLock<Webauthn> = std::sync::OnceLock::new();
-        let webauthn = WEBAUTHN.get_or_init(|| {
-            WebauthnBuilder::new("example.org", &Url::parse("http://example.org").unwrap())
-                .expect("expected webauthn builder creation to succeed")
-                .build()
-                .expect("expected webauthn creation to succeed")
-        });
-        Tools { client, webauthn }
+        Tools {
+            client: SqliteClient::new_memory()
+                .await
+                .expect("expected client creation to succeed"),
+            webauthn: WebauthnBuilder::new(
+                "example.org",
+                &Url::parse("http://example.org").unwrap(),
+            )
+            .expect("expected webauthn builder creation to succeed")
+            .build()
+            .expect("expected webauthn creation to succeed"),
+        }
     }
 
     #[tokio::test]
@@ -668,90 +671,149 @@ mod tests {
         assert_eq!(user.display_name(), "Test User");
     }
 
-    async fn do_create_passkey_registration(id: Uuid) {
+    #[tokio::test]
+    async fn test_create_passkey_registration() {
         let Tools { client, webauthn } = tools().await;
+        let user_id = Uuid::new_v4();
+        let email = "test@example.com";
+        let display_name = "Test User";
         let (_, reg) = webauthn
-            .start_passkey_registration(Uuid::new_v4(), "test@example.com", "Test User", None)
+            .start_passkey_registration(user_id, email, display_name, None)
             .unwrap();
         let registration = PasskeyRegistrationState {
-            id,
-            user_id: Uuid::new_v4(),
-            email: "test@example.com".to_string(),
+            id: Uuid::new_v4(),
+            user_id,
+            email: email.to_string(),
             registration: sqlx::types::Json(reg),
             created_at: chrono::Utc::now(),
         };
         client
             .create_passkey_registration(&registration)
             .await
-            .expect("expected passkey registration creation to succeed");
-    }
-
-    #[tokio::test]
-    async fn test_create_passkey_registration() {
-        let id = Uuid::new_v4();
-        do_create_passkey_registration(id).await;
+            .expect("expected create passkey registration to succeed");
     }
 
     #[tokio::test]
     async fn test_get_passkey_registration_by_id() {
-        let Tools { client, .. } = tools().await;
+        let Tools { client, webauthn } = tools().await;
+        // Set up: create a passkey registration
+        let email = "test@kasad.com";
+        let display_name = "Test User";
         let id = Uuid::new_v4();
-        do_create_passkey_registration(id).await;
-        client
-            .get_passkey_registration_by_id(&id)
-            .await
-            .expect("expected passkey registration to be found");
-    }
-
-    async fn do_create_session(user: &User) -> EncodableHash {
-        let Tools { client, .. } = tools().await;
-        let session = Session {
-            id_hash: blake3::hash(&rand::rng().next_u64().to_le_bytes()).into(),
-            user_id: *user.id(),
-            state: SessionState::Active,
+        let user_id = Uuid::new_v4();
+        let (_, reg) = webauthn
+            .start_passkey_registration(user_id, email, display_name, None)
+            .unwrap();
+        let registration = PasskeyRegistrationState {
+            id,
+            user_id,
+            email: email.to_string(),
+            registration: sqlx::types::Json(reg),
             created_at: chrono::Utc::now(),
-            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
         };
         client
-            .create_session(&session)
+            .create_passkey_registration(&registration)
             .await
-            .expect("expected session creation to succeed");
-        session.id_hash
+            .unwrap();
+
+        // Test: get the passkey registration by id
+        let registration = client.get_passkey_registration_by_id(&id).await.unwrap();
+        assert_eq!(registration.user_id, user_id);
+        assert_eq!(registration.email, email);
     }
 
     #[tokio::test]
     async fn test_create_session() {
         let Tools { client, .. } = tools().await;
+
+        // Set up: create a user
         let user = client
             .create_user(
                 &Uuid::new_v4(),
                 &UserCreate {
-                    email: "test3@example.com".to_string(),
+                    email: "test@kasad.com".to_string(),
                     display_name: "Test User".to_string(),
                 },
             )
             .await
             .expect("expected user creation to succeed");
-        do_create_session(&user).await;
+
+        // Test: create session
+        let session_id: u64 = 123456789;
+        let session = Session {
+            user_id: *user.id(),
+            id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
+            state: SessionState::Active,
+            created_at: chrono::Utc::now(),
+            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+        };
+        client.create_session(&session).await.unwrap();
     }
 
     #[tokio::test]
     async fn test_get_session_by_id_hash() {
         let Tools { client, .. } = tools().await;
+
+        // Set up: create a user
         let user = client
             .create_user(
                 &Uuid::new_v4(),
                 &UserCreate {
-                    email: "test4@example.com".to_string(),
+                    email: "test@kasad.com".to_string(),
                     display_name: "Test User".to_string(),
                 },
             )
             .await
             .expect("expected user creation to succeed");
-        let session_id = do_create_session(&user).await;
-        client
-            .get_session_by_id_hash(&session_id)
+
+        // Set up: create session
+        let session_id: u64 = 123456789;
+        let session = Session {
+            user_id: *user.id(),
+            id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
+            state: SessionState::Active,
+            created_at: chrono::Utc::now(),
+            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+        };
+        client.create_session(&session).await.unwrap();
+
+        // Test: get session by id hash
+        let session = client
+            .get_session_by_id_hash(&session.id_hash)
             .await
-            .expect("expected session to be found");
+            .unwrap();
+        assert_eq!(session.user_id, *user.id());
+        assert_eq!(session.id_hash.0, session.id_hash.0);
+        assert_eq!(session.state, SessionState::Active);
+        assert_eq!(session.created_at, session.created_at);
+        assert_eq!(session.expires_at, session.expires_at);
+    }
+
+    #[tokio::test]
+    async fn test_create_passkey() {
+        let Tools { client, .. } = tools().await;
+        let user_id = Uuid::new_v4();
+        client
+            .create_user(
+                &user_id,
+                &UserCreate {
+                    email: "test@kasad.com".to_string(),
+                    display_name: "Test User".to_string(),
+                },
+            )
+            .await
+            .unwrap();
+        let passkey: Passkey = serde_json::from_str(PASSKEY_JSON).unwrap();
+        client
+            .create_passkey(
+                &Uuid::new_v4(),
+                &user_id,
+                &NewPasskeyCredential {
+                    display_name: None,
+                    passkey,
+                },
+            )
+            .await
+            .unwrap();
     }
 }

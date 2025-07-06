@@ -74,7 +74,6 @@ pub async fn start_registration(
 #[derive(Debug, Clone, Deserialize)]
 pub struct FinishRegistrationRequest {
     pub user: UserCreate,
-    pub passkey_name: String,
     pub passkey: RegisterPublicKeyCredential,
 }
 
@@ -101,7 +100,7 @@ pub async fn finish_registration(
         .webauthn
         .finish_passkey_registration(&request.passkey, &reg_state.registration)?;
     let new_passkey = NewPasskeyCredential {
-        display_name: request.passkey_name,
+        display_name: None,
         passkey,
     };
     let user = state.db.create_user(&Uuid::new_v4(), &request.user).await?;
@@ -123,8 +122,12 @@ pub async fn finish_registration(
             return Err(err.into());
         }
     };
-    // FIXME: authenticate new user
-    Ok((cookies.remove(REGISTRATION_ID_COOKIE), Json(user)))
+    let (session, session_cookie) = new_session(&user);
+    state.db.create_session(&session).await?;
+    Ok((
+        cookies.remove(REGISTRATION_ID_COOKIE).add(session_cookie),
+        Json(user),
+    ))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -142,7 +145,7 @@ pub async fn start_authentication(
         .get_passkeys_by_user_email(&request.email)
         .await?
         .into_iter()
-        .map(|pk| pk.into_passkey())
+        .map(|pk| pk.into())
         .collect();
     let (challenge, auth_state) = state.webauthn.start_passkey_authentication(&passkeys)?;
     let auth_id = Uuid::new_v4();

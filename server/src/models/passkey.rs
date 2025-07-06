@@ -7,49 +7,24 @@ pub type WrappedPasskey = Json<Passkey>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PasskeyCredential {
-    id: Uuid,
-    user_id: Uuid,
-    display_name: String,
-    passkey: WrappedPasskey,
-    created_at: chrono::DateTime<chrono::Utc>,
-    last_used_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub display_name: Option<String>,
+    pub passkey: WrappedPasskey,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl PasskeyCredential {
-    #[must_use]
-    pub fn id(&self) -> &Uuid {
-        &self.id
-    }
-
-    #[must_use]
-    pub fn user_id(&self) -> &Uuid {
-        &self.user_id
-    }
-
-    #[must_use]
-    pub fn passkey(&self) -> &Passkey {
-        &self.passkey
-    }
-
-    pub fn into_passkey(self) -> Passkey {
-        self.passkey.0
-    }
-
-    #[must_use]
-    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.created_at
-    }
-
-    #[must_use]
-    pub fn last_used_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        self.last_used_at
+impl From<PasskeyCredential> for Passkey {
+    fn from(value: PasskeyCredential) -> Self {
+        value.passkey.0
     }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PasskeyCredentialUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
+    pub display_name: Option<Option<String>>,
 }
 
 impl PasskeyCredentialUpdate {
@@ -59,7 +34,7 @@ impl PasskeyCredentialUpdate {
     }
 
     #[must_use]
-    pub fn with_display_name(mut self, display_name: String) -> Self {
+    pub fn with_display_name(mut self, display_name: Option<String>) -> Self {
         self.display_name = Some(display_name);
         self
     }
@@ -72,7 +47,7 @@ impl PasskeyCredentialUpdate {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewPasskeyCredential {
-    pub display_name: String,
+    pub display_name: Option<String>,
     pub passkey: Passkey,
 }
 

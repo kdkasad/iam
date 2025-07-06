@@ -31,6 +31,7 @@ CREATE TABLE passkeys (
     id BLOB PRIMARY KEY,
     user_id BLOB NOT NULL,
     passkey TEXT NOT NULL,
+    display_name TEXT,
     created_at INTEGER NOT NULL,
     last_used_at INTEGER,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE

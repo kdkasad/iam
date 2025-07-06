@@ -9,7 +9,7 @@ use webauthn_rs::{WebauthnBuilder, prelude::Url};
 
 mod vars {
     pub const STATIC_DIR: &str = "STATIC_DIR";
-    pub const DOMAIN: &str = "DOMAIN";
+    pub const ORIGIN: &str = "ORIGIN";
     pub const SERVER_NAME: &str = "SERVER_NAME";
     pub const RP_ID: &str = "RP_ID";
 }
@@ -24,7 +24,7 @@ async fn main() -> ExitCode {
     tracing_subscriber::fmt().init();
 
     // Create server config
-    let domain = getenv_or_exit(vars::DOMAIN);
+    let origin = getenv_or_exit(vars::ORIGIN);
     let config = AppConfig {
         instance_name: match std::env::var(vars::SERVER_NAME) {
             Ok(name) => name,
@@ -32,9 +32,9 @@ async fn main() -> ExitCode {
                 warn!(
                     "{} is not set; defaulting to {}",
                     vars::SERVER_NAME,
-                    &domain
+                    &origin
                 );
-                domain.clone()
+                origin.clone()
             }
             Err(VarError::NotUnicode(_)) => {
                 error!("{} is not valid UTF-8", vars::SERVER_NAME);
@@ -49,7 +49,7 @@ async fn main() -> ExitCode {
     });
 
     // Create WebAuthn client
-    let origin = match Url::parse(&format!("https://{domain}")) {
+    let parsed_origin = match Url::parse(&origin) {
         Ok(origin) => origin,
         Err(err) => {
             error!("failed to create URL from given origin: {err}");
@@ -57,14 +57,14 @@ async fn main() -> ExitCode {
         }
     };
     let rp_id = std::env::var(vars::RP_ID).unwrap_or_else(|err| match err {
-        VarError::NotPresent => domain.to_string(),
+        VarError::NotPresent => parsed_origin.to_string(),
         VarError::NotUnicode(os_string) => {
             error!("{} is not valid UTF-8: {os_string:?}", vars::RP_ID);
             std::process::exit(1);
         }
     });
-    info!("Creating WebAuthn manager with RP ID {rp_id} and origin {origin}");
-    let webauthn = WebauthnBuilder::new(&rp_id, &origin)
+    info!("Creating WebAuthn manager with RP ID {rp_id} and origin {parsed_origin}");
+    let webauthn = WebauthnBuilder::new(&rp_id, &parsed_origin)
         .unwrap()
         .rp_name(&config.instance_name)
         .build()

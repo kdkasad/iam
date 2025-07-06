@@ -10,15 +10,15 @@
 	let {
 		ref = $bindable(null),
 		class: className,
-		email = $bindable(''),
 		isLoading = false,
 		error = $bindable(null),
 		onsubmit = undefined,
+		register = false,
 		...restProps
 	}: Omit<WithElementRef<HTMLAttributes<HTMLDivElement>>, 'onsubmit'> & {
-		email?: string;
 		isLoading?: boolean;
 		error?: string | null;
+		register?: boolean;
 		onsubmit?: Pick<HTMLAttributes<HTMLFormElement>, 'onsubmit'>['onsubmit'];
 	} = $props();
 
@@ -35,10 +35,17 @@
 					</div>
 					<span class="sr-only">{$appConfig.instanceName}</span>
 				</div>
-				<h1 class="text-xl font-bold">Welcome to {$appConfig.instanceName}</h1>
+				<h1 class="text-xl font-bold">
+						{register ? 'Create an account for' : 'Log in to'} {$appConfig.instanceName}
+				</h1>
 				<div class="text-center text-sm">
-					Don&apos;t have an account?
-					<a href="/register" class="underline underline-offset-4"> Sign up </a>
+					{#if register}
+						Already have an account?
+						<a href="/login" class="underline underline-offset-4"> Log in </a>
+					{:else}
+						Don&apos;t have an account?
+						<a href="/register" class="underline underline-offset-4"> Sign up </a>
+					{/if}
 				</div>
 			</div>
 			<div class="flex flex-col gap-6">
@@ -52,18 +59,36 @@
 						autofocus
 						autocomplete="email webauthn"
 						required
-						bind:value={email}
 						disabled={isLoading}
 					/>
 				</div>
 
+				{#if register}
+					<div class="grid gap-3">
+						<Label for="displayName-{id}">Name</Label>
+						<Input
+							id="displayName-{id}"
+							type="text"
+							name="displayName"
+							placeholder="Your Name"
+							autocomplete="name"
+							required
+							disabled={isLoading}
+						/>
+					</div>
+				{/if}
+
 				<div>
 					{#if error}
-						<p class="text-sm text-red-500 mb-4">{error}</p>
+						<p class="mb-4 text-sm text-red-500">{error}</p>
 					{/if}
 
 					<Button type="submit" class="w-full" loading={isLoading}>
-						{isLoading ? 'Logging in...' : 'Log in'}
+						{#if register}
+							{isLoading ? 'Signing up...' : 'Sign up'}
+						{:else}
+							{isLoading ? 'Logging in...' : 'Log in'}
+						{/if}
 					</Button>
 				</div>
 			</div>
