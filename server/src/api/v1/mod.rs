@@ -33,7 +33,9 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn) -> Router<()> {
 
     let router_unauthenticated: Router<V1State> = Router::new()
         .route("/register/start", post(auth::start_registration))
-        .route("/register/finish", post(auth::finish_registration));
+        .route("/register/finish", post(auth::finish_registration))
+        .route("/auth/start", post(auth::start_authentication))
+        .route("/auth/finish", post(auth::finish_authentication));
 
     let state = V1StateInner { db, webauthn };
     router_public
@@ -53,8 +55,14 @@ enum ApiV1Error {
     #[error("Internal server error: {0}")]
     InternalServerError(Box<dyn std::error::Error>),
 
-    #[error("Invalid or missing registration ID")]
+    #[error("Invalid or missing registration ID cookie")]
     InvalidRegistrationId,
+
+    #[error("Session expired")]
+    SessionExpired,
+
+    #[error("Invalid or missing authentication ID cookie")]
+    InvalidAuthenticationId,
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -72,7 +80,9 @@ impl IntoResponse for ApiV1Error {
         let status = match self {
             NotFound => StatusCode::NOT_FOUND,
             WebAuthn(_) | InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            InvalidRegistrationId => StatusCode::BAD_REQUEST,
+            InvalidAuthenticationId | InvalidRegistrationId | SessionExpired => {
+                StatusCode::BAD_REQUEST
+            }
         };
         (status, self.to_string()).into_response()
     }

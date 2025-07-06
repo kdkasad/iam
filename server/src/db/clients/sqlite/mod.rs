@@ -9,8 +9,9 @@ use uuid::Uuid;
 use crate::{
     db::interface::{DatabaseClient, DatabaseError},
     models::{
-        NewPasskeyCredential, PasskeyCredential, PasskeyCredentialUpdate, PasskeyRegistrationState,
-        Tag, TagUpdate, User, UserCreate, UserUpdate,
+        EncodableHash, NewPasskeyCredential, PasskeyAuthenticationState, PasskeyCredential,
+        PasskeyCredentialUpdate, PasskeyRegistrationState, Tag, TagUpdate, User, UserCreate,
+        UserUpdate,
     },
 };
 
@@ -530,11 +531,82 @@ impl DatabaseClient for SqliteClient {
             Ok(registration)
         })
     }
+
+    fn create_passkey_authentication<'a>(
+        &self,
+        state: &'a PasskeyAuthenticationState,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            sqlx::query("INSERT INTO passkey_authentications (id, user_email, state, created_at) VALUES ($1, $2, $3, $4)")
+                .bind(state.id)
+                .bind(&state.email)
+                .bind(&state.state)
+                .bind(state.created_at.timestamp())
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn get_passkey_authentication_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyAuthenticationState, DatabaseError>> + Send + 'id>>
+    {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            let state: PasskeyAuthenticationState =
+                sqlx::query_as("SELECT * FROM passkey_authentications WHERE id = $1")
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await?;
+            Ok(state)
+        })
+    }
+
+    fn create_session<'a>(
+        &self,
+        session: &'a crate::models::Session,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            sqlx::query(
+                "INSERT INTO sessions (id_hash, user_id, created_at, expires_at, state)
+                VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(session.id_hash)
+            .bind(session.user_id)
+            .bind(session.created_at.timestamp())
+            .bind(session.expires_at.timestamp())
+            .bind(session.state)
+            .execute(&pool)
+            .await?;
+            Ok(())
+        })
+    }
+
+    fn get_session_by_id_hash<'id>(
+        &self,
+        id_hash: &'id EncodableHash,
+    ) -> Pin<Box<dyn Future<Output = Result<crate::models::Session, DatabaseError>> + Send + 'id>>
+    {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            let session: crate::models::Session =
+                sqlx::query_as("SELECT * FROM sessions WHERE id_hash = $1")
+                    .bind(id_hash)
+                    .fetch_one(&pool)
+                    .await?;
+            Ok(session)
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use rand::RngCore;
     use tokio::sync::OnceCell;
     use uuid::Uuid;
     use webauthn_rs::{Webauthn, WebauthnBuilder, prelude::Url};
@@ -542,7 +614,9 @@ mod tests {
     use super::SqliteClient;
     use crate::{
         db::interface::DatabaseClient,
-        models::{PasskeyRegistrationState, UserCreate},
+        models::{
+            EncodableHash, PasskeyRegistrationState, Session, SessionState, User, UserCreate,
+        },
     };
 
     struct Tools {
@@ -619,5 +693,57 @@ mod tests {
             .get_passkey_registration_by_id(&id)
             .await
             .expect("expected passkey registration to be found");
+    }
+
+    async fn do_create_session(user: &User) -> EncodableHash {
+        let Tools { client, .. } = tools().await;
+        let session = Session {
+            id_hash: blake3::hash(&rand::rng().next_u64().to_le_bytes()).into(),
+            user_id: *user.id(),
+            state: SessionState::Active,
+            created_at: chrono::Utc::now(),
+            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+        };
+        client
+            .create_session(&session)
+            .await
+            .expect("expected session creation to succeed");
+        session.id_hash
+    }
+
+    #[tokio::test]
+    async fn test_create_session() {
+        let Tools { client, .. } = tools().await;
+        let user = client
+            .create_user(
+                &Uuid::new_v4(),
+                &UserCreate {
+                    email: "test3@example.com".to_string(),
+                    display_name: "Test User".to_string(),
+                },
+            )
+            .await
+            .expect("expected user creation to succeed");
+        do_create_session(&user).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_session_by_id_hash() {
+        let Tools { client, .. } = tools().await;
+        let user = client
+            .create_user(
+                &Uuid::new_v4(),
+                &UserCreate {
+                    email: "test4@example.com".to_string(),
+                    display_name: "Test User".to_string(),
+                },
+            )
+            .await
+            .expect("expected user creation to succeed");
+        let session_id = do_create_session(&user).await;
+        client
+            .get_session_by_id_hash(&session_id)
+            .await
+            .expect("expected session to be found");
     }
 }

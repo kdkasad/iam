@@ -1,14 +1,14 @@
 use uuid::Uuid;
 
 mod passkey;
+mod session;
 mod tag;
 mod user;
 
-pub use passkey::{
-    NewPasskeyCredential, PasskeyCredential, PasskeyCredentialUpdate, PasskeyRegistrationState,
-};
-pub use tag::{Tag, TagUpdate};
-pub use user::{User, UserCreate, UserUpdate};
+pub use passkey::*;
+pub use session::*;
+pub use tag::*;
+pub use user::*;
 
 /// Helper function to generate a new UUID.
 /// This allows us to easily switch out the UUID version if needed.

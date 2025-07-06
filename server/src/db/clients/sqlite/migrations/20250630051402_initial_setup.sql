@@ -47,4 +47,21 @@ CREATE TABLE passkey_registrations (
     -- no foreign key because the user may not exist yet
 ) STRICT;
 
-CREATE UNIQUE INDEX passkey_registrations_id_index ON passkey_registrations (id);
+CREATE TABLE passkey_authentications (
+    id BLOB PRIMARY KEY,
+    user_email TEXT NOT NULL,
+    state TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_email) REFERENCES users (email) ON DELETE CASCADE
+) STRICT;
+
+CREATE TABLE sessions (
+    id_hash BLOB PRIMARY KEY,
+    user_id BLOB NOT NULL,
+    state INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX sessions_user_id_index ON sessions (user_id);

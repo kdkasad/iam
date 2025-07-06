@@ -3,8 +3,9 @@ use std::{borrow::Cow, future::Future, pin::Pin};
 use uuid::Uuid;
 
 use crate::models::{
-    NewPasskeyCredential, PasskeyCredential, PasskeyCredentialUpdate, PasskeyRegistrationState,
-    Tag, TagUpdate, User, UserCreate, UserUpdate,
+    EncodableHash, NewPasskeyCredential, PasskeyAuthenticationState, PasskeyCredential,
+    PasskeyCredentialUpdate, PasskeyRegistrationState, Session, Tag, TagUpdate, User, UserCreate,
+    UserUpdate,
 };
 
 pub trait DatabaseClient: Send + Sync + 'static {
@@ -128,7 +129,7 @@ pub trait DatabaseClient: Send + Sync + 'static {
         id: &'id Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>>;
 
-    // Passkey registration repository
+    // Authentication repository
 
     fn create_passkey_registration<'a>(
         &self,
@@ -139,6 +140,28 @@ pub trait DatabaseClient: Send + Sync + 'static {
         &self,
         id: &'id Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<PasskeyRegistrationState, DatabaseError>> + Send + 'id>>;
+
+    fn create_passkey_authentication<'a>(
+        &self,
+        state: &'a PasskeyAuthenticationState,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>>;
+
+    fn get_passkey_authentication_by_id<'id>(
+        &self,
+        id: &'id Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyAuthenticationState, DatabaseError>> + Send + 'id>>;
+
+    // Session repository
+
+    fn create_session<'a>(
+        &self,
+        session: &'a Session,
+    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>>;
+
+    fn get_session_by_id_hash<'id>(
+        &self,
+        id_hash: &'id EncodableHash,
+    ) -> Pin<Box<dyn Future<Output = Result<Session, DatabaseError>> + Send + 'id>>;
 }
 
 /// Error type for database operations

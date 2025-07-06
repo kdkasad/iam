@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use sqlx::{prelude::FromRow, types::Json};
 use uuid::Uuid;
-use webauthn_rs::prelude::{Passkey, PasskeyRegistration};
+use webauthn_rs::prelude::{Passkey, PasskeyAuthentication, PasskeyRegistration};
 
-pub type WrappedPasskey = sqlx::types::Json<Passkey>;
+pub type WrappedPasskey = Json<Passkey>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PasskeyCredential {
@@ -81,6 +81,14 @@ pub struct PasskeyRegistrationState {
     pub id: Uuid,
     pub user_id: Uuid,
     pub email: String,
-    pub registration: sqlx::types::Json<PasskeyRegistration>,
+    pub registration: Json<PasskeyRegistration>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PasskeyAuthenticationState {
+    pub id: Uuid,
+    pub email: String,
+    pub state: Json<PasskeyAuthentication>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
