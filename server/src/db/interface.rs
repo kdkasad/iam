@@ -185,6 +185,9 @@ pub enum DatabaseError {
 
     #[error("database error: {0}")]
     Other(Box<dyn std::error::Error + Send + Sync + 'static>),
+
+    #[error("user not found")]
+    UserNotFound,
 }
 
 impl From<sqlx::Error> for DatabaseError {

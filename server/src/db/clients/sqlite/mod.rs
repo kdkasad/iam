@@ -538,13 +538,21 @@ impl DatabaseClient for SqliteClient {
     ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            sqlx::query("INSERT INTO passkey_authentications (id, user_email, state, created_at) VALUES ($1, $2, $3, $4)")
+            let result = sqlx::query("INSERT INTO passkey_authentications (id, user_email, state, created_at) VALUES ($1, $2, $3, $4)")
                 .bind(state.id)
                 .bind(&state.email)
                 .bind(&state.state)
                 .bind(state.created_at.timestamp())
                 .execute(&pool)
-                .await?;
+                .await;
+            if let Err(e) = result {
+                if e.as_database_error()
+                    .is_some_and(|dbe| dbe.is_foreign_key_violation())
+                {
+                    return Err(DatabaseError::UserNotFound);
+                }
+                return Err(e.into());
+            }
             Ok(())
         })
     }

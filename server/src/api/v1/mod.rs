@@ -73,6 +73,9 @@ enum ApiV1Error {
 
     #[error("Invalid or missing authentication ID cookie")]
     InvalidAuthenticationId,
+
+    #[error("User not found")]
+    UserNotFound,
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -93,6 +96,7 @@ impl IntoResponse for ApiV1Error {
             InvalidAuthenticationId | InvalidRegistrationId | SessionExpired => {
                 StatusCode::BAD_REQUEST
             }
+            UserNotFound => StatusCode::NOT_FOUND,
         };
         (status, self.to_string()).into_response()
     }

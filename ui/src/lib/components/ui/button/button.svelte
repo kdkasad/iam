@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import Loader2 from '@lucide/svelte/icons/loader-2';
 	import { cn, type WithElementRef } from "$lib/utils.js";
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from "svelte/elements";
 	import { type VariantProps, tv } from "tailwind-variants";
@@ -36,6 +37,7 @@
 		WithElementRef<HTMLAnchorAttributes> & {
 			variant?: ButtonVariant;
 			size?: ButtonSize;
+			loading?: boolean;
 		};
 </script>
 
@@ -48,6 +50,7 @@
 		href = undefined,
 		type = "button",
 		disabled,
+		loading = false,
 		children,
 		...restProps
 	}: ButtonProps = $props();
@@ -72,9 +75,12 @@
 		data-slot="button"
 		class={cn(buttonVariants({ variant, size }), className)}
 		{type}
-		{disabled}
+		disabled={disabled || loading}
 		{...restProps}
 	>
+		{#if loading}
+			<Loader2 class="size-4 animate-spin" />
+		{/if}
 		{@render children?.()}
 	</button>
 {/if}

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use axum::{Form, Json, extract::State};
+use axum::{Json, extract::State};
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
@@ -16,6 +16,7 @@ use webauthn_rs::prelude::{
 
 use crate::{
     api::v1::{ApiV1Error, V1State},
+    db::interface::DatabaseError,
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyRegistrationState, Session,
         SessionState, User, UserCreate,
@@ -42,7 +43,7 @@ where
 pub async fn start_registration(
     cookies: CookieJar,
     State(state): State<V1State>,
-    Form(request): Form<UserCreate>,
+    Json(request): Json<UserCreate>,
 ) -> Result<(CookieJar, Json<CreationChallengeResponse>), ApiV1Error> {
     let user_id = Uuid::new_v4();
     let (challenge, reg) = state.webauthn.start_passkey_registration(
@@ -134,7 +135,7 @@ pub struct AuthenticationStartRequest {
 pub async fn start_authentication(
     cookies: CookieJar,
     State(state): State<V1State>,
-    Form(request): Form<AuthenticationStartRequest>,
+    Json(request): Json<AuthenticationStartRequest>,
 ) -> Result<(CookieJar, Json<RequestChallengeResponse>), ApiV1Error> {
     let passkeys: Vec<Passkey> = state
         .db
@@ -151,7 +152,13 @@ pub async fn start_authentication(
         state: sqlx::types::Json(auth_state),
         created_at: chrono::Utc::now(),
     };
-    state.db.create_passkey_authentication(&auth_state).await?;
+    match state.db.create_passkey_authentication(&auth_state).await {
+        Ok(_) => (),
+        Err(DatabaseError::UserNotFound) => {
+            return Err(ApiV1Error::UserNotFound);
+        }
+        Err(e) => return Err(e.into()),
+    }
     Ok((
         cookies.add(new_secure_cookie(
             AUTHENTICATION_ID_COOKIE,
