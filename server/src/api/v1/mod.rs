@@ -35,7 +35,8 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig
 
     let router_authenticated: Router<V1State> = Router::new()
         .route("/users/{id}", get(user::get_user))
-        .route("/users", post(user::post_user));
+        .route("/users", post(user::post_user))
+        .route("/logout", post(auth::logout));
 
     let router_unauthenticated: Router<V1State> = Router::new()
         .route("/register/start", post(auth::start_registration))
@@ -76,6 +77,11 @@ enum ApiV1Error {
 
     #[error("User not found")]
     UserNotFound,
+    // #[error("Invalid session ID")]
+    // InvalidSessionId,
+
+    // #[error("Not logged in")]
+    // NotLoggedIn,
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -97,6 +103,7 @@ impl IntoResponse for ApiV1Error {
                 StatusCode::BAD_REQUEST
             }
             UserNotFound => StatusCode::NOT_FOUND,
+            // NotLoggedIn => StatusCode::UNAUTHORIZED,
         };
         (status, self.to_string()).into_response()
     }

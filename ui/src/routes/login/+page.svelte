@@ -62,6 +62,7 @@
 			let data = await finish_response.json();
 			console.log(data);
 			// FIXME: redirect to home page
+			window.location.href = '/logout';
 		} else {
 			error = 'Failed to login; please try again';
 		}

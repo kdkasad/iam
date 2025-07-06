@@ -1,9 +1,16 @@
 use std::borrow::Cow;
 
-use axum::{Json, extract::State};
-use axum_extra::extract::{
-    CookieJar,
-    cookie::{Cookie, SameSite},
+use axum::{
+    Json,
+    extract::{Query, State},
+    response::Redirect,
+};
+use axum_extra::{
+    either::Either,
+    extract::{
+        CookieJar,
+        cookie::{Cookie, SameSite},
+    },
 };
 use rand::RngCore;
 use serde::Deserialize;
@@ -37,6 +44,7 @@ where
         .same_site(SameSite::Strict)
         .http_only(true)
         .secure(true)
+        .path("/")
         .into()
 }
 
@@ -218,4 +226,21 @@ fn new_session(user: &User) -> (Session, Cookie<'static>) {
     };
     let cookie = new_secure_cookie(SESSION_ID_COOKIE, id_hash.to_string());
     (session, cookie)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LogoutQueryParams {
+    pub next: Option<String>,
+}
+
+pub async fn logout(
+    cookies: CookieJar,
+    Query(query): Query<LogoutQueryParams>,
+) -> Either<(CookieJar, Redirect), CookieJar> {
+    let new_cookies = cookies.remove(SESSION_ID_COOKIE);
+    if let Some(next) = query.next {
+        Either::E1((new_cookies, Redirect::to(&next)))
+    } else {
+        Either::E2(new_cookies)
+    }
 }

@@ -61,7 +61,8 @@
 			isLoading = false;
 			return;
 		}
-		// TODO: Redirect to home page
+		// FIXME: Redirect to home page
+		window.location.href = '/logout';
 	}
 </script>
 

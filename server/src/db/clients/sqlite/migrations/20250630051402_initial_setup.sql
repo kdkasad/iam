@@ -50,10 +50,10 @@ CREATE TABLE passkey_registrations (
 
 CREATE TABLE passkey_authentications (
     id BLOB PRIMARY KEY,
-    user_email TEXT NOT NULL,
+    email TEXT NOT NULL,
     state TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    FOREIGN KEY (user_email) REFERENCES users (email) ON DELETE CASCADE
+    FOREIGN KEY (email) REFERENCES users (email) ON DELETE CASCADE
 ) STRICT;
 
 CREATE TABLE sessions (
