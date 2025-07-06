@@ -32,7 +32,7 @@ use crate::{
 
 const REGISTRATION_ID_COOKIE: &str = "registration_id";
 const AUTHENTICATION_ID_COOKIE: &str = "authentication_id";
-const SESSION_ID_COOKIE: &str = "session_id";
+pub const SESSION_ID_COOKIE: &str = "session_id";
 const SESSION_DURATION: chrono::Duration = chrono::Duration::days(1);
 
 fn new_secure_cookie<'a, K, V>(name: K, value: V) -> Cookie<'a>
@@ -133,7 +133,9 @@ pub async fn finish_registration(
     let (session, session_cookie) = new_session(&user);
     state.db.create_session(&session).await?;
     Ok((
-        cookies.remove(REGISTRATION_ID_COOKIE).add(session_cookie),
+        cookies
+            .remove(new_secure_cookie(REGISTRATION_ID_COOKIE, ""))
+            .add(session_cookie),
         Json(user),
     ))
 }
@@ -208,7 +210,9 @@ pub async fn finish_authentication(
     let (session, session_cookie) = new_session(&user);
     state.db.create_session(&session).await?;
     Ok((
-        cookies.remove(AUTHENTICATION_ID_COOKIE).add(session_cookie),
+        cookies
+            .remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, ""))
+            .add(session_cookie),
         Json(user),
     ))
 }
@@ -237,7 +241,7 @@ pub async fn logout(
     cookies: CookieJar,
     Query(query): Query<LogoutQueryParams>,
 ) -> Either<(CookieJar, Redirect), CookieJar> {
-    let new_cookies = cookies.remove(SESSION_ID_COOKIE);
+    let new_cookies = cookies.remove(new_secure_cookie(SESSION_ID_COOKIE, ""));
     if let Some(next) = query.next {
         Either::E1((new_cookies, Redirect::to(&next)))
     } else {

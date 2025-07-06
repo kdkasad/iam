@@ -16,6 +16,7 @@ use crate::{
 
 mod auth;
 mod config;
+mod extractors;
 mod user;
 
 struct V1StateInner {
@@ -36,6 +37,7 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig
     let router_authenticated: Router<V1State> = Router::new()
         .route("/users/{id}", get(user::get_user))
         .route("/users", post(user::post_user))
+        .route("/users/me", get(user::get_current_user))
         .route("/logout", post(auth::logout));
 
     let router_unauthenticated: Router<V1State> = Router::new()
@@ -77,11 +79,15 @@ enum ApiV1Error {
 
     #[error("User not found")]
     UserNotFound,
-    // #[error("Invalid session ID")]
-    // InvalidSessionId,
 
-    // #[error("Not logged in")]
-    // NotLoggedIn,
+    #[error("Invalid session ID")]
+    InvalidSessionId,
+
+    #[error("Not logged in")]
+    NotLoggedIn,
+
+    #[error("Not an administrator")]
+    NotAdmin,
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -99,11 +105,11 @@ impl IntoResponse for ApiV1Error {
         let status = match self {
             NotFound => StatusCode::NOT_FOUND,
             WebAuthn(_) | InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            InvalidAuthenticationId | InvalidRegistrationId | SessionExpired => {
+            InvalidAuthenticationId | InvalidRegistrationId | InvalidSessionId => {
                 StatusCode::BAD_REQUEST
             }
             UserNotFound => StatusCode::NOT_FOUND,
-            // NotLoggedIn => StatusCode::UNAUTHORIZED,
+            NotLoggedIn | SessionExpired | NotAdmin => StatusCode::UNAUTHORIZED,
         };
         (status, self.to_string()).into_response()
     }
