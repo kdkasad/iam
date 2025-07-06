@@ -2,13 +2,14 @@ use axum::Router;
 use iam_server::{api::new_api_router, db::clients::sqlite::SqliteClient, ui::new_ui_server};
 use std::{env::VarError, ffi::OsString, path::PathBuf, process::ExitCode};
 use tokio::net::TcpListener;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 use webauthn_rs::{WebauthnBuilder, prelude::Url};
 
 mod vars {
     pub const STATIC_DIR: &str = "STATIC_DIR";
     pub const DOMAIN: &str = "DOMAIN";
     pub const SERVER_NAME: &str = "SERVER_NAME";
+    pub const RP_ID: &str = "RP_ID";
 }
 
 mod defaults {
@@ -34,7 +35,15 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let webauthn = WebauthnBuilder::new(&domain, &origin)
+    let rp_id = std::env::var(vars::RP_ID).unwrap_or_else(|err| match err {
+        VarError::NotPresent => domain.to_string(),
+        VarError::NotUnicode(os_string) => {
+            error!("{} is not valid UTF-8: {os_string:?}", vars::RP_ID);
+            std::process::exit(1);
+        }
+    });
+    info!("Creating WebAuthn manager with RP ID {rp_id} and origin {origin}");
+    let webauthn = WebauthnBuilder::new(&rp_id, &origin)
         .unwrap()
         .rp_name(
             std::env::var(vars::SERVER_NAME)
