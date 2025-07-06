@@ -78,7 +78,7 @@ async fn main() -> ExitCode {
     }));
     let ui = new_ui_server(&static_dir);
 
-    let router = Router::new().nest("/api", api).nest_service("/ui", ui);
+    let router = Router::new().nest("/api", api).fallback_service(ui);
 
     let listener = TcpListener::bind(defaults::LISTEN_ADDR)
         .await
