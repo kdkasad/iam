@@ -1,5 +1,7 @@
 use axum::Router;
-use iam_server::{api::new_api_router, db::clients::sqlite::SqliteClient, ui::new_ui_server};
+use iam_server::{
+    api::new_api_router, db::clients::sqlite::SqliteClient, models::AppConfig, ui::new_ui_server,
+};
 use std::{env::VarError, ffi::OsString, path::PathBuf, process::ExitCode};
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
@@ -21,13 +23,32 @@ mod defaults {
 async fn main() -> ExitCode {
     tracing_subscriber::fmt().init();
 
+    // Create server config
+    let domain = getenv_or_exit(vars::DOMAIN);
+    let config = AppConfig {
+        instance_name: match std::env::var(vars::SERVER_NAME) {
+            Ok(name) => name,
+            Err(VarError::NotPresent) => {
+                warn!(
+                    "{} is not set; defaulting to {}",
+                    vars::SERVER_NAME,
+                    &domain
+                );
+                domain.clone()
+            }
+            Err(VarError::NotUnicode(_)) => {
+                error!("{} is not valid UTF-8", vars::SERVER_NAME);
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+
     // Create database client
     let db = SqliteClient::open().await.unwrap_or_exit(|err| {
         error!("failed to open database: {err}");
     });
 
     // Create WebAuthn client
-    let domain = getenv_or_exit(vars::DOMAIN);
     let origin = match Url::parse(&format!("https://{domain}")) {
         Ok(origin) => origin,
         Err(err) => {
@@ -45,28 +66,11 @@ async fn main() -> ExitCode {
     info!("Creating WebAuthn manager with RP ID {rp_id} and origin {origin}");
     let webauthn = WebauthnBuilder::new(&rp_id, &origin)
         .unwrap()
-        .rp_name(
-            std::env::var(vars::SERVER_NAME)
-                .as_ref()
-                .unwrap_or_else(|err| match err {
-                    VarError::NotPresent => {
-                        warn!(
-                            "{} is not set; defaulting to {}",
-                            vars::SERVER_NAME,
-                            &domain
-                        );
-                        &domain
-                    }
-                    VarError::NotUnicode(os_string) => {
-                        error!("{} is not valid UTF-8: {os_string:?}", vars::SERVER_NAME);
-                        std::process::exit(1);
-                    }
-                }),
-        )
+        .rp_name(&config.instance_name)
         .build()
         .unwrap_or_exit(|err| error!("failed to build WebAuthn manager: {err}"));
 
-    let api = new_api_router(db, webauthn);
+    let api = new_api_router(db, webauthn, config);
 
     let static_dir = PathBuf::from(std::env::var_os(vars::STATIC_DIR).unwrap_or_else(|| {
         warn!(

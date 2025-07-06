@@ -1,10 +1,12 @@
 use uuid::Uuid;
 
+mod config;
 mod passkey;
 mod session;
 mod tag;
 mod user;
 
+pub use config::*;
 pub use passkey::*;
 pub use session::*;
 pub use tag::*;

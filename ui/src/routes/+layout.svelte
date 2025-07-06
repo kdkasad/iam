@@ -1,7 +1,15 @@
 <script lang="ts">
 	import '../app.css';
 
-	let { children } = $props();
+	import { appConfig } from '$lib/app-config';
+
+	let { data, children } = $props();
+
+	$effect(() => {
+		if (data.appConfig) {
+			appConfig.set(data.appConfig);
+		}
+	});
 </script>
 
 {@render children()}

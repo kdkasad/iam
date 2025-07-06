@@ -9,22 +9,28 @@ use axum::{
 use tower_http::cors::CorsLayer;
 use webauthn_rs::Webauthn;
 
-use crate::db::interface::{DatabaseClient, DatabaseError};
+use crate::{
+    db::interface::{DatabaseClient, DatabaseError},
+    models::AppConfig,
+};
 
 mod auth;
+mod config;
 mod user;
 
 struct V1StateInner {
     db: Arc<dyn DatabaseClient>,
     webauthn: Webauthn,
+    config: Arc<AppConfig>,
 }
 
 type V1State = Arc<V1StateInner>;
 
 /// Returns a sub-router for `/api/v1`
-pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn) -> Router<()> {
+pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig) -> Router<()> {
     let router_public: Router<V1State> = Router::new()
         .route("/health", get(async || ()))
+        .route("/config", get(config::get_config))
         .layer(CorsLayer::permissive());
 
     let router_authenticated: Router<V1State> = Router::new()
@@ -37,7 +43,11 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn) -> Router<()> {
         .route("/auth/start", post(auth::start_authentication))
         .route("/auth/finish", post(auth::finish_authentication));
 
-    let state = V1StateInner { db, webauthn };
+    let state = V1StateInner {
+        db,
+        webauthn,
+        config: Arc::new(config),
+    };
     router_public
         .merge(router_authenticated)
         .merge(router_unauthenticated)
