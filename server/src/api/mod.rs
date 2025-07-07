@@ -9,6 +9,7 @@ use webauthn_rs::Webauthn;
 
 use crate::{db::interface::DatabaseClient, models::AppConfig};
 
+mod middleware;
 mod v1;
 
 /// Maximum request payload size in bytes
