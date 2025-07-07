@@ -27,6 +27,8 @@ impl From<PasskeyCredential> for Passkey {
 pub struct PasskeyCredentialUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub passkey: Option<WrappedPasskey>,
 }
 
 impl PasskeyCredentialUpdate {
@@ -36,14 +38,23 @@ impl PasskeyCredentialUpdate {
     }
 
     #[must_use]
-    pub fn with_display_name(mut self, display_name: Option<String>) -> Self {
-        self.display_name = Some(display_name);
+    pub fn with_display_name(mut self, display_name: Option<impl ToString>) -> Self {
+        self.display_name = Some(display_name.map(|v| v.to_string()));
+        self
+    }
+
+    #[must_use]
+    pub fn with_passkey<P>(mut self, passkey: P) -> Self
+    where
+        P: Into<WrappedPasskey>,
+    {
+        self.passkey = Some(passkey.into());
         self
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.display_name.is_none()
+        self.display_name.is_none() && self.passkey.is_none()
     }
 }
 

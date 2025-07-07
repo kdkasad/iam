@@ -19,7 +19,7 @@ use serde::Deserialize;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 use webauthn_rs::prelude::{
-    CreationChallengeResponse, DiscoverableKey, Passkey, PublicKeyCredential,
+    AuthenticationResult, CreationChallengeResponse, DiscoverableKey, Passkey, PublicKeyCredential,
     RegisterPublicKeyCredential, RequestChallengeResponse, WebauthnError,
 };
 use webauthn_rs_proto::{AuthenticatorSelectionCriteria, ResidentKeyRequirement};
@@ -29,7 +29,7 @@ use crate::{
     db::interface::DatabaseError,
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
-        PasskeyRegistrationState, Session, SessionState, User, UserCreate,
+        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, User, UserCreate,
     },
 };
 
@@ -217,7 +217,7 @@ pub async fn finish_authentication(
         .webauthn
         .finish_passkey_authentication(&request, &passkey_state)?;
     if result.needs_update() {
-        // FIXME: update passkey in database
+        do_passkey_update(&state, &result).await?;
     }
     let Some(email) = auth_state.email else {
         return Err(ApiV1Error::InvalidAuthenticationId);
@@ -231,6 +231,30 @@ pub async fn finish_authentication(
             .add(session_cookie),
         Json(user),
     ))
+}
+
+async fn do_passkey_update(
+    state: &V1State,
+    result: &AuthenticationResult,
+) -> Result<(), DatabaseError> {
+    debug!(
+        "Updating passkey for credential ID {}",
+        BASE64_STANDARD.encode(result.cred_id())
+    );
+    let mut passkey = state
+        .db
+        .get_passkey_by_credential_id(result.cred_id())
+        .await?;
+    if let Some(true) = passkey.passkey.update_credential(result) {
+        state
+            .db
+            .update_passkey(
+                &passkey.id,
+                &PasskeyCredentialUpdate::new().with_passkey(passkey.passkey),
+            )
+            .await?;
+    }
+    Ok(())
 }
 
 pub async fn start_conditional_ui_authentication(
@@ -311,7 +335,7 @@ pub async fn finish_conditional_ui_authentication(
     }
 
     if result.needs_update() {
-        // FIXME: update passkey in database
+        do_passkey_update(&state, &result).await?;
     }
 
     // Create a new session for the user

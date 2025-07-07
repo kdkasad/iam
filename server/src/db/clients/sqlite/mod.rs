@@ -476,15 +476,34 @@ impl DatabaseClient for SqliteClient {
                 return Err(DatabaseError::EmptyUpdate);
             }
 
-            // There's only one updatable field, so we can just unwrap it
-            let passkey: PasskeyCredential = sqlx::query_as(
-                "UPDATE passkeys SET display_name = $1 WHERE id = $2
-                    RETURNING id, user_id, passkey, display_name, created_at, last_used_at",
-            )
-            .bind(passkey.display_name.as_ref().unwrap())
-            .bind(id)
-            .fetch_one(&pool)
-            .await?;
+            let mut query_parts = Vec::new();
+            let mut has_display_name = false;
+            let mut has_passkey = false;
+            if passkey.display_name.is_some() {
+                query_parts.push("display_name = ?");
+                has_display_name = true;
+            }
+            if passkey.passkey.is_some() {
+                query_parts.push("passkey = ?");
+                has_passkey = true;
+            }
+
+            let query_str = format!(
+                "UPDATE passkeys SET {}
+                WHERE id = ?
+                RETURNING id, user_id, passkey, display_name, created_at, last_used_at",
+                query_parts.join(", ")
+            );
+            let mut query = sqlx::query_as::<_, PasskeyCredential>(&query_str);
+            if has_display_name {
+                query = query.bind(passkey.display_name.as_ref().unwrap().as_deref());
+            }
+            if has_passkey {
+                query = query.bind(passkey.passkey.as_ref().unwrap());
+            }
+            query = query.bind(id);
+
+            let passkey: PasskeyCredential = query.fetch_one(&pool).await?;
             Ok(passkey)
         })
     }
@@ -634,207 +653,4 @@ impl DatabaseClient for SqliteClient {
 }
 
 #[cfg(test)]
-mod tests {
-
-    use uuid::Uuid;
-    use webauthn_rs::{
-        Webauthn, WebauthnBuilder,
-        prelude::{Passkey, Url},
-    };
-
-    use super::SqliteClient;
-    use crate::{
-        db::interface::DatabaseClient,
-        models::{
-            NewPasskeyCredential, PasskeyRegistrationState, Session, SessionState, UserCreate,
-        },
-    };
-
-    struct Tools {
-        client: SqliteClient,
-        webauthn: Webauthn,
-    }
-
-    const PASSKEY_JSON: &str = r#"
-    {"cred":{"cred_id":"Gx07kWmVrKBrB31KmXxHSnAK2kI","cred":{"type_":"ES256","key":{"EC_EC2":{"curve":"SECP256R1","x":"k1zbsP39Y1go2_Pea23c5AT2ZuP6NBx67NTZZdjiPUM","y":"qznBgidGVTuHwMohwxJNDRN_gVh1Ipn5mENE2hYXot0"}}},"counter":0,"transports":null,"user_verified":true,"backup_eligible":true,"backup_state":true,"registration_policy":"required","extensions":{"cred_protect":"Ignored","hmac_create_secret":"NotRequested","appid":"NotRequested","cred_props":"Ignored"},"attestation":{"data":"None","metadata":"None"},"attestation_format":"none"}}
-    "#;
-
-    /// Create a new set of tools/clients for a test.
-    async fn tools() -> Tools {
-        Tools {
-            client: SqliteClient::new_memory()
-                .await
-                .expect("expected client creation to succeed"),
-            webauthn: WebauthnBuilder::new(
-                "example.org",
-                &Url::parse("http://example.org").unwrap(),
-            )
-            .expect("expected webauthn builder creation to succeed")
-            .build()
-            .expect("expected webauthn creation to succeed"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_create_user() {
-        let Tools { client, .. } = tools().await;
-        let user = client
-            .create_user(
-                &Uuid::new_v4(),
-                &UserCreate {
-                    email: "test@example.com".to_string(),
-                    display_name: "Test User".to_string(),
-                },
-            )
-            .await
-            .expect("expected user creation to succeed");
-        assert_eq!(user.email(), "test@example.com");
-        assert_eq!(user.display_name(), "Test User");
-    }
-
-    #[tokio::test]
-    async fn test_create_passkey_registration() {
-        let Tools { client, webauthn } = tools().await;
-        let user_id = Uuid::new_v4();
-        let email = "test@example.com";
-        let display_name = "Test User";
-        let (_, reg) = webauthn
-            .start_passkey_registration(user_id, email, display_name, None)
-            .unwrap();
-        let registration = PasskeyRegistrationState {
-            id: Uuid::new_v4(),
-            user_id,
-            email: email.to_string(),
-            registration: sqlx::types::Json(reg),
-            created_at: chrono::Utc::now(),
-        };
-        client
-            .create_passkey_registration(&registration)
-            .await
-            .expect("expected create passkey registration to succeed");
-    }
-
-    #[tokio::test]
-    async fn test_get_passkey_registration_by_id() {
-        let Tools { client, webauthn } = tools().await;
-        // Set up: create a passkey registration
-        let email = "test@kasad.com";
-        let display_name = "Test User";
-        let id = Uuid::new_v4();
-        let user_id = Uuid::new_v4();
-        let (_, reg) = webauthn
-            .start_passkey_registration(user_id, email, display_name, None)
-            .unwrap();
-        let registration = PasskeyRegistrationState {
-            id,
-            user_id,
-            email: email.to_string(),
-            registration: sqlx::types::Json(reg),
-            created_at: chrono::Utc::now(),
-        };
-        client
-            .create_passkey_registration(&registration)
-            .await
-            .unwrap();
-
-        // Test: get the passkey registration by id
-        let registration = client.get_passkey_registration_by_id(&id).await.unwrap();
-        assert_eq!(registration.user_id, user_id);
-        assert_eq!(registration.email, email);
-    }
-
-    #[tokio::test]
-    async fn test_create_session() {
-        let Tools { client, .. } = tools().await;
-
-        // Set up: create a user
-        let user = client
-            .create_user(
-                &Uuid::new_v4(),
-                &UserCreate {
-                    email: "test@kasad.com".to_string(),
-                    display_name: "Test User".to_string(),
-                },
-            )
-            .await
-            .expect("expected user creation to succeed");
-
-        // Test: create session
-        let session_id: u64 = 123456789;
-        let session = Session {
-            user_id: *user.id(),
-            id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
-            state: SessionState::Active,
-            created_at: chrono::Utc::now(),
-            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
-        };
-        client.create_session(&session).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_get_session_by_id_hash() {
-        let Tools { client, .. } = tools().await;
-
-        // Set up: create a user
-        let user = client
-            .create_user(
-                &Uuid::new_v4(),
-                &UserCreate {
-                    email: "test@kasad.com".to_string(),
-                    display_name: "Test User".to_string(),
-                },
-            )
-            .await
-            .expect("expected user creation to succeed");
-
-        // Set up: create session
-        let session_id: u64 = 123456789;
-        let session = Session {
-            user_id: *user.id(),
-            id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
-            state: SessionState::Active,
-            created_at: chrono::Utc::now(),
-            expires_at: chrono::Utc::now() + chrono::Duration::days(1),
-        };
-        client.create_session(&session).await.unwrap();
-
-        // Test: get session by id hash
-        let session = client
-            .get_session_by_id_hash(&session.id_hash)
-            .await
-            .unwrap();
-        assert_eq!(session.user_id, *user.id());
-        assert_eq!(session.id_hash.0, session.id_hash.0);
-        assert_eq!(session.state, SessionState::Active);
-        assert_eq!(session.created_at, session.created_at);
-        assert_eq!(session.expires_at, session.expires_at);
-    }
-
-    #[tokio::test]
-    async fn test_create_passkey() {
-        let Tools { client, .. } = tools().await;
-        let user_id = Uuid::new_v4();
-        client
-            .create_user(
-                &user_id,
-                &UserCreate {
-                    email: "test@kasad.com".to_string(),
-                    display_name: "Test User".to_string(),
-                },
-            )
-            .await
-            .unwrap();
-        let passkey: Passkey = serde_json::from_str(PASSKEY_JSON).unwrap();
-        client
-            .create_passkey(
-                &Uuid::new_v4(),
-                &user_id,
-                &NewPasskeyCredential {
-                    display_name: None,
-                    passkey,
-                },
-            )
-            .await
-            .unwrap();
-    }
-}
+mod tests;

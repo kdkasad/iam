@@ -9,7 +9,7 @@ use crate::{
     db::interface::DatabaseClient,
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
-        PasskeyRegistrationState, Session, SessionState, User, UserCreate,
+        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, UserCreate,
     },
 };
 
@@ -20,6 +20,12 @@ struct Tools {
 
 /// Create a new set of tools/clients for a test.
 async fn tools() -> Tools {
+    // Enable debug logging
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+    let _ = tracing::subscriber::set_global_default(subscriber);
+
     Tools {
         client: SqliteClient::new_memory()
             .await
@@ -230,7 +236,10 @@ async fn test_non_discoverable_passkey_authentication() {
         .unwrap();
     assert_eq!(got_state.id, state.id);
     assert_eq!(got_state.email, state.email);
-    assert!(matches!(got_state.state.0, PasskeyAuthenticationStateType::Regular(_)));
+    assert!(matches!(
+        got_state.state.0,
+        PasskeyAuthenticationStateType::Regular(_)
+    ));
 }
 
 #[tokio::test]
@@ -268,5 +277,61 @@ async fn test_discoverable_passkey_authentication() {
         .unwrap();
     assert_eq!(got_state.id, state.id);
     assert_eq!(got_state.email, state.email);
-    assert!(matches!(got_state.state.0, PasskeyAuthenticationStateType::Discoverable(_)));
+    assert!(matches!(
+        got_state.state.0,
+        PasskeyAuthenticationStateType::Discoverable(_)
+    ));
+}
+
+#[tokio::test]
+async fn test_update_passkey() {
+    let Tools { client, .. } = tools().await;
+
+    // Load passkeys from JSON files
+    let passkey: Passkey = serde_json::from_str(include_str!("resources/passkey.json")).unwrap();
+    let passkey_incremented: Passkey =
+        serde_json::from_str(include_str!("resources/passkey-incremented.json")).unwrap();
+
+    // Create user for foreign key constraints
+    let user_id = Uuid::new_v4();
+    client
+        .create_user(
+            &user_id,
+            &UserCreate {
+                email: "test@kasad.com".to_string(),
+                display_name: "Test User".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Create passkey
+    let pkid = Uuid::new_v4();
+    client
+        .create_passkey(
+            &pkid,
+            &user_id,
+            &NewPasskeyCredential {
+                display_name: None,
+                passkey,
+            },
+        )
+        .await
+        .unwrap();
+
+    // Update display name
+    let update = PasskeyCredentialUpdate::new().with_display_name(Some("My passkey"));
+    client.update_passkey(&pkid, &update).await.unwrap();
+
+    // Get updated passkey and ensure display name is updated
+    let passkey = client.get_passkey_by_id(&pkid).await.unwrap();
+    assert_eq!(passkey.display_name, Some("My passkey".to_string()));
+
+    // Update passkey
+    let update = PasskeyCredentialUpdate::new().with_passkey(passkey_incremented.clone());
+    client.update_passkey(&pkid, &update).await.unwrap();
+
+    // Get updated passkey and ensure counter is incremented
+    let passkey = client.get_passkey_by_id(&pkid).await.unwrap();
+    assert_eq!(passkey.passkey.0, passkey_incremented);
 }
