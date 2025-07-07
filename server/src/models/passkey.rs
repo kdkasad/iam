@@ -1,13 +1,17 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, types::Json};
+#[cfg(feature = "sqlx")]
+use sqlx::prelude::FromRow;
 use uuid::Uuid;
 use webauthn_rs::prelude::{
     DiscoverableAuthentication, Passkey, PasskeyAuthentication, PasskeyRegistration,
 };
 
-pub type WrappedPasskey = Json<Passkey>;
+use crate::models::ViaJson;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub type WrappedPasskey = ViaJson<Passkey>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(FromRow))]
 pub struct PasskeyCredential {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -64,20 +68,22 @@ pub struct NewPasskeyCredential {
     pub passkey: Passkey,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(FromRow))]
 pub struct PasskeyRegistrationState {
     pub id: Uuid,
     pub user_id: Uuid,
     pub email: String,
-    pub registration: Json<PasskeyRegistration>,
+    pub registration: ViaJson<PasskeyRegistration>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(FromRow))]
 pub struct PasskeyAuthenticationState {
     pub id: Uuid,
     pub email: Option<String>,
-    pub state: Json<PasskeyAuthenticationStateType>,
+    pub state: ViaJson<PasskeyAuthenticationStateType>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 

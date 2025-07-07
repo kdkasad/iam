@@ -201,6 +201,7 @@ pub enum DatabaseError {
     UserNotFound,
 }
 
+#[cfg(feature = "sqlx")]
 impl From<sqlx::Error> for DatabaseError {
     fn from(error: sqlx::Error) -> Self {
         match error {

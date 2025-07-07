@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[features]
+# default = ["sqlite3"]
+sqlite3 = ["sqlx"]
+sqlx = ["dep:sqlx"]
+
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 missing-panics-doc = "allow"
@@ -17,11 +22,11 @@ missing-errors-doc = "allow"
 axum = "0.8.4"
 tokio = { version = "1.45.1", features = ["rt-multi-thread", "net", "fs"] }
 tracing = "0.1.41"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive", "rc"] }
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
 chrono = { version = "0.4.41", features = ["serde"] }
 thiserror = "2.0.12"
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "migrate", "uuid", "chrono"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "migrate", "uuid", "chrono"], optional = true }
 tracing-subscriber = "0.3.19"
 tower-http = { version = "0.6.6", features = ["cors", "auth", "limit", "trace", "sensitive-headers", "fs", "set-header"] }
 tower = "0.5.2"

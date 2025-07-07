@@ -11,7 +11,7 @@ use crate::{
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
         PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, SessionUpdate,
-        UserCreate,
+        UserCreate, ViaJson,
     },
 };
 
@@ -69,7 +69,7 @@ async fn test_create_passkey_registration() {
         id: Uuid::new_v4(),
         user_id,
         email: email.to_string(),
-        registration: sqlx::types::Json(reg),
+        registration: ViaJson(reg),
         created_at: chrono::Utc::now(),
     };
     client
@@ -93,7 +93,7 @@ async fn test_get_passkey_registration_by_id() {
         id,
         user_id,
         email: email.to_string(),
-        registration: sqlx::types::Json(reg),
+        registration: ViaJson(reg),
         created_at: chrono::Utc::now(),
     };
     client
@@ -224,7 +224,7 @@ async fn test_non_discoverable_passkey_authentication() {
     let state = PasskeyAuthenticationState {
         id: Uuid::new_v4(),
         email: Some("test@kasad.com".to_string()),
-        state: sqlx::types::Json(PasskeyAuthenticationStateType::Regular(auth_state)),
+        state: ViaJson(PasskeyAuthenticationStateType::Regular(auth_state)),
         created_at: chrono::Utc::now(),
     };
 
@@ -265,7 +265,7 @@ async fn test_discoverable_passkey_authentication() {
     let state = PasskeyAuthenticationState {
         id: Uuid::new_v4(),
         email: Some("test@kasad.com".to_string()),
-        state: sqlx::types::Json(PasskeyAuthenticationStateType::Discoverable(disco_state)),
+        state: ViaJson(PasskeyAuthenticationStateType::Discoverable(disco_state)),
         created_at: chrono::Utc::now(),
     };
 

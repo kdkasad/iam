@@ -30,7 +30,7 @@ use crate::{
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
         PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, SessionUpdate,
-        User, UserCreate,
+        User, UserCreate, ViaJson,
     },
 };
 
@@ -74,7 +74,7 @@ pub async fn start_registration(
         id: Uuid::new_v4(),
         user_id,
         email: request.email,
-        registration: sqlx::types::Json(reg),
+        registration: ViaJson(reg),
         created_at: chrono::Utc::now(),
     };
     state.db.create_passkey_registration(&reg_state).await?;
@@ -173,7 +173,7 @@ pub async fn start_authentication(
     let auth_state = PasskeyAuthenticationState {
         id: auth_id,
         email: Some(request.email),
-        state: sqlx::types::Json(PasskeyAuthenticationStateType::Regular(auth_state)),
+        state: ViaJson(PasskeyAuthenticationStateType::Regular(auth_state)),
         created_at: chrono::Utc::now(),
     };
     match state.db.create_passkey_authentication(&auth_state).await {
@@ -266,7 +266,7 @@ pub async fn start_conditional_ui_authentication(
     let auth_state = PasskeyAuthenticationState {
         id: Uuid::new_v4(),
         email: None,
-        state: sqlx::types::Json(PasskeyAuthenticationStateType::Discoverable(disco_state)),
+        state: ViaJson(PasskeyAuthenticationStateType::Discoverable(disco_state)),
         created_at: chrono::Utc::now(),
     };
     state.db.create_passkey_authentication(&auth_state).await?;

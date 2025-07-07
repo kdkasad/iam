@@ -3,10 +3,10 @@ use crate::{
     models::{ErrNotPopulated, PasskeyCredential, Tag},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct User {
     id: Uuid,
     email: String,
@@ -15,11 +15,11 @@ pub struct User {
     updated_at: chrono::DateTime<chrono::Utc>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[sqlx(skip)]
+    #[cfg_attr(feature = "sqlx", sqlx(skip))]
     tags: Option<Vec<Tag>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[sqlx(skip)]
+    #[cfg_attr(feature = "sqlx", sqlx(skip))]
     passkeys: Option<Vec<PasskeyCredential>>,
 }
 
@@ -113,7 +113,8 @@ impl UserUpdate {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct UserCreate {
     pub email: String,
     pub display_name: String,

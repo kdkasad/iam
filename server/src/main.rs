@@ -7,10 +7,12 @@ use axum::{
         },
     },
 };
+#[cfg(feature = "sqlite3")]
+use iam_server::db::clients::sqlite::SqliteClient;
 use iam_server::{
-    api::new_api_router, db::clients::sqlite::SqliteClient, models::AppConfig, ui::new_ui_server,
+    api::new_api_router, db::interface::DatabaseClient, models::AppConfig, ui::new_ui_server,
 };
-use std::{env::VarError, ffi::OsString, path::PathBuf, process::ExitCode};
+use std::{env::VarError, ffi::OsString, path::PathBuf, process::ExitCode, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::{error, info, warn};
@@ -21,6 +23,7 @@ mod vars {
     pub const ORIGIN: &str = "ORIGIN";
     pub const SERVER_NAME: &str = "SERVER_NAME";
     pub const RP_ID: &str = "RP_ID";
+    pub const DB_BACKEND: &str = "DB_BACKEND";
 }
 
 mod defaults {
@@ -53,9 +56,13 @@ async fn main() -> ExitCode {
     };
 
     // Create database client
-    let db = SqliteClient::open().await.unwrap_or_exit(|err| {
-        error!("failed to open database: {err}");
-    });
+    let db = match get_db_client().await {
+        Ok(db) => db,
+        Err(choice_str) => {
+            error!(choice = choice_str, "Invalid database backend choice");
+            return ExitCode::FAILURE;
+        }
+    };
 
     // Create WebAuthn client
     let parsed_origin = match Url::parse(&origin) {
@@ -128,6 +135,20 @@ fn getenv_or_exit(name: &str) -> String {
     std::env::var(name).unwrap_or_exit(|_| {
         error!("{name} is not set");
     })
+}
+
+// Allow lints that happen when all database backend features are disabled.
+#[allow(clippy::unused_async, unused_variables, unreachable_code)]
+async fn get_db_client() -> Result<Arc<dyn DatabaseClient>, String> {
+    let db_choice = getenv_or_exit(vars::DB_BACKEND);
+    let db: Arc<dyn DatabaseClient> = match db_choice.as_str() {
+        #[cfg(feature = "sqlite3")]
+        "sqlite3" | "sqlite" => Arc::new(SqliteClient::open().await.unwrap_or_exit(|err| {
+            error!("failed to open database: {err}");
+        })),
+        _ => return Err(db_choice),
+    };
+    Ok(db)
 }
 
 trait UnwrapOrExit<T, E> {

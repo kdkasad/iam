@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[repr(u8)]
 pub enum SessionState {
     Active,
@@ -11,7 +11,8 @@ pub enum SessionState {
     LoggedOut,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Session {
     pub id_hash: EncodableHash,
     pub user_id: Uuid,
@@ -20,7 +21,8 @@ pub struct Session {
     pub expires_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct SessionUpdate {
     pub state: Option<SessionState>,
     pub expires_at: Option<DateTime<Utc>>,
@@ -51,12 +53,12 @@ impl SessionUpdate {
 }
 
 mod encodable_hash {
-    use std::{
-        borrow::Cow,
-        ops::{Deref, DerefMut},
-    };
+    #[cfg(feature = "sqlx")]
+    use std::borrow::Cow;
+    use std::ops::{Deref, DerefMut};
 
     use serde::{Deserialize, Serialize};
+    #[cfg(feature = "sqlx")]
     use sqlx::{
         encode::IsNull,
         error::BoxDynError,
@@ -68,12 +70,14 @@ mod encodable_hash {
     #[repr(transparent)]
     pub struct EncodableHash(pub blake3::Hash);
 
+    #[cfg(feature = "sqlx")]
     impl sqlx::Type<sqlx::Sqlite> for EncodableHash {
         fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
             <&[u8] as sqlx::Type<sqlx::Sqlite>>::type_info()
         }
     }
 
+    #[cfg(feature = "sqlx")]
     impl sqlx::Decode<'_, sqlx::Sqlite> for EncodableHash {
         fn decode(value: SqliteValueRef<'_>) -> Result<Self, BoxDynError> {
             let bytes = <&[u8] as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
@@ -81,6 +85,7 @@ mod encodable_hash {
         }
     }
 
+    #[cfg(feature = "sqlx")]
     impl<'q> sqlx::Encode<'q, sqlx::Sqlite> for EncodableHash {
         fn encode_by_ref(
             &self,

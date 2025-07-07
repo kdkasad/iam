@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 use crate::{
@@ -7,7 +6,8 @@ use crate::{
     models::{ErrNotPopulated, User},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Tag {
     id: Uuid,
     name: String,
@@ -15,7 +15,7 @@ pub struct Tag {
     updated_at: chrono::DateTime<chrono::Utc>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[sqlx(skip)]
+    #[cfg_attr(feature = "sqlx", sqlx(skip))]
     users: Option<Vec<User>>,
 }
 
