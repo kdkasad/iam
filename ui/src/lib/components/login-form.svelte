@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UserPlusIcon from '@lucide/svelte/icons/user-plus';
 	import UserLockIcon from '@lucide/svelte/icons/user-lock';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -31,7 +32,11 @@
 			<div class="flex flex-col items-center gap-2">
 				<div class="flex flex-col items-center gap-2 font-medium">
 					<div class="flex size-8 items-center justify-center rounded-md">
-						<UserLockIcon class="size-6" />
+						{#if register}
+							<UserPlusIcon class="size-6" />
+						{:else}
+							<UserLockIcon class="size-6" />
+						{/if}
 					</div>
 					<span class="sr-only">{$appConfig.instanceName}</span>
 				</div>
