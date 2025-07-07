@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    http::StatusCode,
+    http::{Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use webauthn_rs::Webauthn;
 
 use crate::{
@@ -32,7 +32,12 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig
     let router_public: Router<V1State> = Router::new()
         .route("/health", get(async || ()))
         .route("/config", get(config::get_config))
-        .layer(CorsLayer::permissive());
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Method::GET)
+                .allow_credentials(false),
+        );
 
     let router_authenticated: Router<V1State> = Router::new()
         .route("/users/{id}", get(user::get_user))

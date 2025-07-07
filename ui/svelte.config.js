@@ -14,7 +14,13 @@ const config = {
 			fallback: 'index.html',
 			precompress: false,
 			strict: true,
-		})
+		}),
+		csp: {
+			mode: 'auto',
+			directives: {
+				'default-src': ['self'],
+			}
+		}
 	}
 };
 

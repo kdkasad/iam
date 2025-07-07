@@ -1,9 +1,18 @@
-use axum::Router;
+use axum::{
+    Router,
+    http::{
+        HeaderValue,
+        header::{
+            CONTENT_SECURITY_POLICY, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
+        },
+    },
+};
 use iam_server::{
     api::new_api_router, db::clients::sqlite::SqliteClient, models::AppConfig, ui::new_ui_server,
 };
 use std::{env::VarError, ffi::OsString, path::PathBuf, process::ExitCode};
 use tokio::net::TcpListener;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::{error, info, warn};
 use webauthn_rs::{WebauthnBuilder, prelude::Url};
 
@@ -82,7 +91,25 @@ async fn main() -> ExitCode {
     }));
     let ui = new_ui_server(&static_dir);
 
-    let router = Router::new().nest("/api", api).fallback_service(ui);
+    let router = Router::new()
+        .nest("/api", api)
+        .fallback_service(ui)
+        .layer(SetResponseHeaderLayer::if_not_present(
+            X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("frame-ancestors 'none'"),
+        ));
 
     let listener = TcpListener::bind(defaults::LISTEN_ADDR)
         .await
