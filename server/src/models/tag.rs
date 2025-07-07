@@ -48,13 +48,12 @@ impl Tag {
     where
         C: DatabaseClient,
     {
-        match self.users {
-            Some(ref users) => Ok(users),
-            None => {
-                let users = client.get_users_by_tag_id(&self.id).await?;
-                self.users = Some(users);
-                Ok(self.users.as_deref().unwrap())
-            }
+        if let Some(ref users) = self.users {
+            Ok(users)
+        } else {
+            let users = client.get_users_by_tag_id(&self.id).await?;
+            self.users = Some(users);
+            Ok(self.users.as_deref().unwrap())
         }
     }
 }
@@ -65,15 +64,18 @@ pub struct TagUpdate {
 }
 
 impl TagUpdate {
+    #[must_use]
     pub fn new() -> Self {
         Self { name: None }
     }
 
+    #[must_use]
     pub fn with_name(mut self, name: String) -> Self {
         self.name = Some(name);
         self
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.name.is_none()
     }

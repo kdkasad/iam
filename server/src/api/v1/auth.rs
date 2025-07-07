@@ -140,7 +140,7 @@ pub async fn finish_registration(
             }
             return Err(err.into());
         }
-    };
+    }
     let (session, session_cookie) = new_session(&user);
     state.db.create_session(&session).await?;
     Ok((
@@ -166,7 +166,7 @@ pub async fn start_authentication(
         .get_passkeys_by_user_email(&request.email)
         .await?
         .into_iter()
-        .map(|pk| pk.into())
+        .map(std::convert::Into::into)
         .collect();
     let (challenge, auth_state) = state.webauthn.start_passkey_authentication(&passkeys)?;
     let auth_id = Uuid::new_v4();
@@ -177,7 +177,7 @@ pub async fn start_authentication(
         created_at: chrono::Utc::now(),
     };
     match state.db.create_passkey_authentication(&auth_state).await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(DatabaseError::UserNotFound) => {
             return Err(ApiV1Error::UserNotFound);
         }

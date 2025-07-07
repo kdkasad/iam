@@ -117,14 +117,14 @@ impl From<DatabaseError> for ApiV1Error {
 
 impl IntoResponse for ApiV1Error {
     fn into_response(self) -> Response {
+        #[allow(clippy::enum_glob_use)]
         use ApiV1Error::*;
         let status = match self {
-            NotFound => StatusCode::NOT_FOUND,
             WebAuthn(_) | InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             InvalidAuthenticationId | InvalidRegistrationId | InvalidSessionId => {
                 StatusCode::BAD_REQUEST
             }
-            UserNotFound => StatusCode::NOT_FOUND,
+            UserNotFound | NotFound => StatusCode::NOT_FOUND,
             NotLoggedIn | SessionExpired | NotAdmin | AuthFailed(_) => StatusCode::UNAUTHORIZED,
         };
         (status, self.to_string()).into_response()

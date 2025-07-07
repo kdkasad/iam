@@ -57,13 +57,12 @@ impl User {
         &mut self,
         client: &dyn DatabaseClient,
     ) -> Result<&[Tag], DatabaseError> {
-        match self.tags {
-            Some(ref tags) => Ok(tags),
-            None => {
-                let tags = client.get_tags_by_user_id(&self.id).await?;
-                self.tags = Some(tags);
-                Ok(self.tags.as_deref().unwrap())
-            }
+        if let Some(ref tags) = self.tags {
+            Ok(tags)
+        } else {
+            let tags = client.get_tags_by_user_id(&self.id).await?;
+            self.tags = Some(tags);
+            Ok(self.tags.as_deref().unwrap())
         }
     }
 
@@ -71,13 +70,12 @@ impl User {
         &mut self,
         client: &dyn DatabaseClient,
     ) -> Result<&[PasskeyCredential], DatabaseError> {
-        match self.passkeys {
-            Some(ref passkeys) => Ok(passkeys),
-            None => {
-                let passkeys = client.get_passkeys_by_user_id(&self.id).await?;
-                self.passkeys = Some(passkeys);
-                Ok(self.passkeys.as_deref().unwrap())
-            }
+        if let Some(ref passkeys) = self.passkeys {
+            Ok(passkeys)
+        } else {
+            let passkeys = client.get_passkeys_by_user_id(&self.id).await?;
+            self.passkeys = Some(passkeys);
+            Ok(self.passkeys.as_deref().unwrap())
         }
     }
 }
@@ -89,6 +87,7 @@ pub struct UserUpdate {
 }
 
 impl UserUpdate {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             email: None,
@@ -96,16 +95,19 @@ impl UserUpdate {
         }
     }
 
+    #[must_use]
     pub fn with_email(mut self, email: String) -> Self {
         self.email = Some(email);
         self
     }
 
+    #[must_use]
     pub fn with_display_name(mut self, display_name: String) -> Self {
         self.display_name = Some(display_name);
         self
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.email.is_none() && self.display_name.is_none()
     }

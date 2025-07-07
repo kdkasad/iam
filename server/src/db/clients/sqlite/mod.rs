@@ -588,7 +588,7 @@ impl DatabaseClient for SqliteClient {
                 .await;
             if let Err(e) = result {
                 if e.as_database_error()
-                    .is_some_and(|dbe| dbe.is_foreign_key_violation())
+                    .is_some_and(sqlx::error::DatabaseError::is_foreign_key_violation)
                 {
                     return Err(DatabaseError::UserNotFound);
                 }

@@ -124,7 +124,7 @@ async fn test_create_session() {
         .expect("expected user creation to succeed");
 
     // Test: create session
-    let session_id: u64 = 123456789;
+    let session_id: u64 = 123_456_789;
     let session = Session {
         user_id: *user.id(),
         id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
@@ -152,7 +152,7 @@ async fn test_get_session_by_id_hash() {
         .expect("expected user creation to succeed");
 
     // Set up: create session
-    let session_id: u64 = 123456789;
+    let session_id: u64 = 123_456_789;
     let session = Session {
         user_id: *user.id(),
         id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
@@ -356,7 +356,7 @@ async fn test_update_session() {
         .unwrap();
 
     // Create session
-    let session_id: u64 = 123456789;
+    let session_id: u64 = 123_456_789;
     let session = Session {
         user_id: *user.id(),
         id_hash: blake3::hash(&session_id.to_le_bytes()).into(),

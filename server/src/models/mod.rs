@@ -14,6 +14,7 @@ pub use user::*;
 
 /// Helper function to generate a new UUID.
 /// This allows us to easily switch out the UUID version if needed.
+#[must_use]
 pub fn new_uuid() -> Uuid {
     Uuid::new_v4()
 }

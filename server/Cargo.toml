@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+missing-panics-doc = "allow"
+missing-errors-doc = "allow"
+
 [dependencies]
 axum = "0.8.4"
 tokio = { version = "1.45.1", features = ["rt-multi-thread", "net", "fs"] }

@@ -27,20 +27,24 @@ pub struct SessionUpdate {
 }
 
 impl SessionUpdate {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn with_state(mut self, state: SessionState) -> Self {
         self.state = Some(state);
         self
     }
 
+    #[must_use]
     pub fn with_expires_at(mut self, expires_at: DateTime<Utc>) -> Self {
         self.expires_at = Some(expires_at);
         self
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.state.is_none() && self.expires_at.is_none()
     }
