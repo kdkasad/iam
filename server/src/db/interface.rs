@@ -103,6 +103,11 @@ pub trait DatabaseClient: Send + Sync + 'static {
         id: &'id Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>>;
 
+    fn get_passkey_by_credential_id<'id>(
+        &self,
+        credential_id: &'id [u8],
+    ) -> Pin<Box<dyn Future<Output = Result<PasskeyCredential, DatabaseError>> + Send + 'id>>;
+
     fn get_passkeys_by_user_id<'id>(
         &self,
         user_id: &'id Uuid,

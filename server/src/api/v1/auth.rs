@@ -9,24 +9,27 @@ use axum_extra::{
     either::Either,
     extract::{
         CookieJar,
-        cookie::{Cookie, SameSite},
+        cookie::{Cookie, Expiration, SameSite},
     },
 };
+use base64::{Engine, prelude::BASE64_STANDARD};
+use cookie::{CookieBuilder, time::Duration};
 use rand::RngCore;
 use serde::Deserialize;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 use webauthn_rs::prelude::{
-    CreationChallengeResponse, Passkey, PublicKeyCredential, RegisterPublicKeyCredential,
-    RequestChallengeResponse,
+    CreationChallengeResponse, DiscoverableKey, Passkey, PublicKeyCredential,
+    RegisterPublicKeyCredential, RequestChallengeResponse, WebauthnError,
 };
+use webauthn_rs_proto::{AuthenticatorSelectionCriteria, ResidentKeyRequirement};
 
 use crate::{
     api::v1::{ApiV1Error, V1State},
     db::interface::DatabaseError,
     models::{
-        NewPasskeyCredential, PasskeyAuthenticationState, PasskeyRegistrationState, Session,
-        SessionState, User, UserCreate,
+        NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
+        PasskeyRegistrationState, Session, SessionState, User, UserCreate,
     },
 };
 
@@ -35,7 +38,7 @@ const AUTHENTICATION_ID_COOKIE: &str = "authentication_id";
 pub const SESSION_ID_COOKIE: &str = "session_id";
 const SESSION_DURATION: chrono::Duration = chrono::Duration::days(1);
 
-fn new_secure_cookie<'a, K, V>(name: K, value: V) -> Cookie<'a>
+fn new_secure_cookie<'a, K, V>(name: K, value: V) -> CookieBuilder<'a>
 where
     K: Into<Cow<'a, str>>,
     V: Into<Cow<'a, str>>,
@@ -45,7 +48,6 @@ where
         .http_only(true)
         .secure(true)
         .path("/")
-        .into()
 }
 
 pub async fn start_registration(
@@ -54,12 +56,19 @@ pub async fn start_registration(
     Json(request): Json<UserCreate>,
 ) -> Result<(CookieJar, Json<CreationChallengeResponse>), ApiV1Error> {
     let user_id = Uuid::new_v4();
-    let (challenge, reg) = state.webauthn.start_passkey_registration(
+    let (mut challenge, reg) = state.webauthn.start_passkey_registration(
         user_id,
         &request.email,
         &request.display_name,
         None,
     )?;
+
+    // Prefer resident keys
+    challenge.public_key.authenticator_selection = Some(AuthenticatorSelectionCriteria {
+        resident_key: Some(ResidentKeyRequirement::Preferred),
+        ..Default::default()
+    });
+
     let reg_state = PasskeyRegistrationState {
         id: Uuid::new_v4(),
         user_id,
@@ -70,10 +79,8 @@ pub async fn start_registration(
     state.db.create_passkey_registration(&reg_state).await?;
     Ok((
         cookies.add(
-            Cookie::build((REGISTRATION_ID_COOKIE, reg_state.id.to_string()))
-                .same_site(SameSite::Strict)
-                .http_only(true)
-                .secure(true),
+            new_secure_cookie(REGISTRATION_ID_COOKIE, reg_state.id.to_string())
+                .expires(Expiration::Session),
         ),
         Json(challenge),
     ))
@@ -111,7 +118,10 @@ pub async fn finish_registration(
         display_name: None,
         passkey,
     };
-    let user = state.db.create_user(&Uuid::new_v4(), &request.user).await?;
+    let user = state
+        .db
+        .create_user(&reg_state.user_id, &request.user)
+        .await?;
     match state
         .db
         .create_passkey(&Uuid::new_v4(), user.id(), &new_passkey)
@@ -161,8 +171,8 @@ pub async fn start_authentication(
     let auth_id = Uuid::new_v4();
     let auth_state = PasskeyAuthenticationState {
         id: auth_id,
-        email: request.email,
-        state: sqlx::types::Json(auth_state),
+        email: Some(request.email),
+        state: sqlx::types::Json(PasskeyAuthenticationStateType::Regular(auth_state)),
         created_at: chrono::Utc::now(),
     };
     match state.db.create_passkey_authentication(&auth_state).await {
@@ -173,10 +183,10 @@ pub async fn start_authentication(
         Err(e) => return Err(e.into()),
     }
     Ok((
-        cookies.add(new_secure_cookie(
-            AUTHENTICATION_ID_COOKIE,
-            auth_id.to_string(),
-        )),
+        cookies.add(
+            new_secure_cookie(AUTHENTICATION_ID_COOKIE, auth_id.to_string())
+                .expires(Expiration::Session),
+        ),
         Json(challenge),
     ))
 }
@@ -200,13 +210,112 @@ pub async fn finish_authentication(
     if auth_state.created_at < five_minutes_ago {
         return Err(ApiV1Error::SessionExpired);
     }
+    let PasskeyAuthenticationStateType::Regular(passkey_state) = auth_state.state.0 else {
+        return Err(ApiV1Error::InvalidAuthenticationId);
+    };
     let result = state
         .webauthn
-        .finish_passkey_authentication(&request, &auth_state.state)?;
+        .finish_passkey_authentication(&request, &passkey_state)?;
     if result.needs_update() {
         // FIXME: update passkey in database
     }
-    let user = state.db.get_user_by_email(&auth_state.email).await?;
+    let Some(email) = auth_state.email else {
+        return Err(ApiV1Error::InvalidAuthenticationId);
+    };
+    let user = state.db.get_user_by_email(&email).await?;
+    let (session, session_cookie) = new_session(&user);
+    state.db.create_session(&session).await?;
+    Ok((
+        cookies
+            .remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, ""))
+            .add(session_cookie),
+        Json(user),
+    ))
+}
+
+pub async fn start_conditional_ui_authentication(
+    State(state): State<V1State>,
+    cookies: CookieJar,
+) -> Result<(CookieJar, Json<RequestChallengeResponse>), ApiV1Error> {
+    let (challenge, disco_state) = state.webauthn.start_discoverable_authentication()?;
+    let auth_state = PasskeyAuthenticationState {
+        id: Uuid::new_v4(),
+        email: None,
+        state: sqlx::types::Json(PasskeyAuthenticationStateType::Discoverable(disco_state)),
+        created_at: chrono::Utc::now(),
+    };
+    state.db.create_passkey_authentication(&auth_state).await?;
+    Ok((
+        cookies.add(
+            new_secure_cookie(AUTHENTICATION_ID_COOKIE, auth_state.id.to_string())
+                .expires(Expiration::Session),
+        ),
+        Json(challenge),
+    ))
+}
+
+pub async fn finish_conditional_ui_authentication(
+    State(state): State<V1State>,
+    cookies: CookieJar,
+    Json(request): Json<PublicKeyCredential>,
+) -> Result<(CookieJar, Json<User>), ApiV1Error> {
+    // Get the authentication ID from the cookie
+    let Some(auth_id_cookie) = cookies.get(AUTHENTICATION_ID_COOKIE) else {
+        debug!("No auth ID cookie found");
+        return Err(ApiV1Error::InvalidAuthenticationId);
+    };
+    let Ok(auth_id) = Uuid::parse_str(auth_id_cookie.value()) else {
+        debug!("Invalid auth ID cookie value: {}", auth_id_cookie.value());
+        return Err(ApiV1Error::InvalidAuthenticationId);
+    };
+
+    // Get the passkey from the credential ID in the request
+    let (user_id, cred_id) = state
+        .webauthn
+        .identify_discoverable_authentication(&request)?;
+    let auth_state = match state.db.get_passkey_authentication_by_id(&auth_id).await {
+        Ok(auth_state) => auth_state,
+        Err(DatabaseError::NotFound) => {
+            debug!("Auth state not found for ID {auth_id}");
+            return Err(ApiV1Error::InvalidAuthenticationId);
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let passkey = match state.db.get_passkey_by_credential_id(cred_id).await {
+        Ok(passkey) => passkey,
+        Err(DatabaseError::NotFound) => {
+            debug!(
+                "Passkey not found for credential ID {}",
+                BASE64_STANDARD.encode(cred_id)
+            );
+            return Err(ApiV1Error::InvalidAuthenticationId);
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let PasskeyAuthenticationStateType::Discoverable(disco_state) = auth_state.state.0 else {
+        debug!("Auth state is not a discoverable state");
+        return Err(ApiV1Error::InvalidAuthenticationId);
+    };
+
+    // Finish the authentication
+    let discoverable_key = DiscoverableKey::from(passkey.passkey.0);
+    let result = state
+        .webauthn
+        .finish_discoverable_authentication(&request, disco_state, &[discoverable_key])
+        .map_err(ApiV1Error::AuthFailed)?;
+
+    // Ensure the user ID the user presented matches the one the passkey belongs to
+    if passkey.user_id != user_id {
+        debug!("Expected user ID {} but got {}", passkey.user_id, user_id);
+        return Err(ApiV1Error::AuthFailed(WebauthnError::InvalidUserUniqueId));
+    }
+
+    if result.needs_update() {
+        // FIXME: update passkey in database
+    }
+
+    // Create a new session for the user
+    let user = state.db.get_user_by_id(&user_id).await?;
     let (session, session_cookie) = new_session(&user);
     state.db.create_session(&session).await?;
     Ok((
@@ -228,8 +337,9 @@ fn new_session(user: &User) -> (Session, Cookie<'static>) {
         created_at: chrono::Utc::now(),
         expires_at: chrono::Utc::now() + SESSION_DURATION,
     };
-    let cookie = new_secure_cookie(SESSION_ID_COOKIE, id_hash.to_string());
-    (session, cookie)
+    let cookie =
+        new_secure_cookie(SESSION_ID_COOKIE, id_hash.to_string()).max_age(Duration::days(1));
+    (session, cookie.into())
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -27,6 +27,9 @@
 		const { publicKey } = (await start_response.json()) as {
 			publicKey: PublicKeyCredentialCreationOptionsJSON;
 		};
+		console.debug({ publicKey });
+        publicKey.authenticatorSelection!.requireResidentKey = true;
+        publicKey.authenticatorSelection!.residentKey = 'required';
 		const parsedPublicKey = PublicKeyCredential.parseCreationOptionsFromJSON(publicKey);
 		const credential = await navigator.credentials.create({
 			publicKey: parsedPublicKey

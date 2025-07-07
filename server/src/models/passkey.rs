@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, types::Json};
 use uuid::Uuid;
-use webauthn_rs::prelude::{Passkey, PasskeyAuthentication, PasskeyRegistration};
+use webauthn_rs::prelude::{
+    DiscoverableAuthentication, Passkey, PasskeyAuthentication, PasskeyRegistration,
+};
 
 pub type WrappedPasskey = Json<Passkey>;
 
@@ -63,7 +65,13 @@ pub struct PasskeyRegistrationState {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PasskeyAuthenticationState {
     pub id: Uuid,
-    pub email: String,
-    pub state: Json<PasskeyAuthentication>,
+    pub email: Option<String>,
+    pub state: Json<PasskeyAuthenticationStateType>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PasskeyAuthenticationStateType {
+    Discoverable(DiscoverableAuthentication),
+    Regular(PasskeyAuthentication),
 }

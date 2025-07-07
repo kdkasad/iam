@@ -44,7 +44,15 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig
         .route("/register/start", post(auth::start_registration))
         .route("/register/finish", post(auth::finish_registration))
         .route("/auth/start", post(auth::start_authentication))
-        .route("/auth/finish", post(auth::finish_authentication));
+        .route("/auth/finish", post(auth::finish_authentication))
+        .route(
+            "/auth/discoverable/start",
+            post(auth::start_conditional_ui_authentication),
+        )
+        .route(
+            "/auth/discoverable/finish",
+            post(auth::finish_conditional_ui_authentication),
+        );
 
     let state = V1StateInner {
         db,
@@ -88,6 +96,9 @@ enum ApiV1Error {
 
     #[error("Not an administrator")]
     NotAdmin,
+
+    #[error("Authentication failed: {0}")]
+    AuthFailed(#[source] webauthn_rs::prelude::WebauthnError),
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -109,7 +120,7 @@ impl IntoResponse for ApiV1Error {
                 StatusCode::BAD_REQUEST
             }
             UserNotFound => StatusCode::NOT_FOUND,
-            NotLoggedIn | SessionExpired | NotAdmin => StatusCode::UNAUTHORIZED,
+            NotLoggedIn | SessionExpired | NotAdmin | AuthFailed(_) => StatusCode::UNAUTHORIZED,
         };
         (status, self.to_string()).into_response()
     }

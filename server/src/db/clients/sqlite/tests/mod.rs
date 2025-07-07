@@ -7,7 +7,10 @@ use webauthn_rs::{
 use super::SqliteClient;
 use crate::{
     db::interface::DatabaseClient,
-    models::{NewPasskeyCredential, PasskeyRegistrationState, Session, SessionState, UserCreate},
+    models::{
+        NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
+        PasskeyRegistrationState, Session, SessionState, User, UserCreate,
+    },
 };
 
 struct Tools {
@@ -189,4 +192,81 @@ async fn test_create_passkey() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn test_non_discoverable_passkey_authentication() {
+    let Tools { client, webauthn } = tools().await;
+
+    // Create user so the email exists
+    client
+        .create_user(
+            &Uuid::new_v4(),
+            &UserCreate {
+                email: "test@kasad.com".to_string(),
+                display_name: "Test User".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Create passkey data
+    let passkey: Passkey = serde_json::from_str(include_str!("resources/passkey.json")).unwrap();
+    let (_, auth_state) = webauthn.start_passkey_authentication(&[passkey]).unwrap();
+    let state = PasskeyAuthenticationState {
+        id: Uuid::new_v4(),
+        email: Some("test@kasad.com".to_string()),
+        state: sqlx::types::Json(PasskeyAuthenticationStateType::Regular(auth_state)),
+        created_at: chrono::Utc::now(),
+    };
+
+    // Test create
+    client.create_passkey_authentication(&state).await.unwrap();
+
+    // Test get
+    let got_state = client
+        .get_passkey_authentication_by_id(&state.id)
+        .await
+        .unwrap();
+    assert_eq!(got_state.id, state.id);
+    assert_eq!(got_state.email, state.email);
+    assert!(matches!(got_state.state.0, PasskeyAuthenticationStateType::Regular(_)));
+}
+
+#[tokio::test]
+async fn test_discoverable_passkey_authentication() {
+    let Tools { client, webauthn } = tools().await;
+
+    // Create user so the email exists
+    client
+        .create_user(
+            &Uuid::new_v4(),
+            &UserCreate {
+                email: "test@kasad.com".to_string(),
+                display_name: "Test User".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Create passkey data
+    let (_, disco_state) = webauthn.start_discoverable_authentication().unwrap();
+    let state = PasskeyAuthenticationState {
+        id: Uuid::new_v4(),
+        email: Some("test@kasad.com".to_string()),
+        state: sqlx::types::Json(PasskeyAuthenticationStateType::Discoverable(disco_state)),
+        created_at: chrono::Utc::now(),
+    };
+
+    // Test create
+    client.create_passkey_authentication(&state).await.unwrap();
+
+    // Test get
+    let got_state = client
+        .get_passkey_authentication_by_id(&state.id)
+        .await
+        .unwrap();
+    assert_eq!(got_state.id, state.id);
+    assert_eq!(got_state.email, state.email);
+    assert!(matches!(got_state.state.0, PasskeyAuthenticationStateType::Discoverable(_)));
 }

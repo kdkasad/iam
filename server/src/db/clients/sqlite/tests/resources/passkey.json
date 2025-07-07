@@ -1,1 +1,32 @@
-{"cred":{"cred_id":"Gx07kWmVrKBrB31KmXxHSnAK2kI","cred":{"type_":"ES256","key":{"EC_EC2":{"curve":"SECP256R1","x":"k1zbsP39Y1go2_Pea23c5AT2ZuP6NBx67NTZZdjiPUM","y":"qznBgidGVTuHwMohwxJNDRN_gVh1Ipn5mENE2hYXot0"}}},"counter":0,"transports":null,"user_verified":true,"backup_eligible":true,"backup_state":true,"registration_policy":"required","extensions":{"cred_protect":"Ignored","hmac_create_secret":"NotRequested","appid":"NotRequested","cred_props":"Ignored"},"attestation":{"data":"None","metadata":"None"},"attestation_format":"none"}}
+{
+    "cred": {
+        "cred_id": "Gx07kWmVrKBrB31KmXxHSnAK2kI",
+        "cred": {
+            "type_": "ES256",
+            "key": {
+                "EC_EC2": {
+                    "curve": "SECP256R1",
+                    "x": "k1zbsP39Y1go2_Pea23c5AT2ZuP6NBx67NTZZdjiPUM",
+                    "y": "qznBgidGVTuHwMohwxJNDRN_gVh1Ipn5mENE2hYXot0"
+                }
+            }
+        },
+        "counter": 0,
+        "transports": null,
+        "user_verified": true,
+        "backup_eligible": true,
+        "backup_state": true,
+        "registration_policy": "required",
+        "extensions": {
+            "cred_protect": "Ignored",
+            "hmac_create_secret": "NotRequested",
+            "appid": "NotRequested",
+            "cred_props": "Ignored"
+        },
+        "attestation": {
+            "data": "None",
+            "metadata": "None"
+        },
+        "attestation_format": "none"
+    }
+}

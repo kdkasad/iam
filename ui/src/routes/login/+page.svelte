@@ -1,11 +1,72 @@
 <script lang="ts">
 	import LoginForm from '$lib/components/login-form.svelte';
+	import { onMount } from 'svelte';
 
 	let isLoading: boolean;
 	let error: string | undefined;
 
+	let conditionalAbortController: AbortController | undefined;
+
+	onMount(async () => {
+		const response = await fetch('/api/v1/auth/discoverable/start', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			credentials: 'include'
+		});
+		if (!response.ok) {
+			console.error('Failed to start discoverable authentication:', response.status, response.statusText);
+			return;
+		}
+		const { publicKey: publicKeyJSON, mediation } = await response.json() satisfies {
+			publicKey: PublicKeyCredentialRequestOptionsJSON,
+			mediation?: CredentialMediationRequirement,
+		};
+		console.debug({ publicKeyJSON, mediation });
+		const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(publicKeyJSON);
+		conditionalAbortController = new AbortController();
+		console.log('starting discoverable authentication');
+		const credential = await navigator.credentials.get({
+			publicKey,
+			mediation: 'conditional',
+			signal: conditionalAbortController.signal,
+		});
+		conditionalAbortController = undefined;
+		if (!credential) {
+			console.warn('No discoverable passkey found');
+			return;
+		}
+		if (!(credential instanceof PublicKeyCredential)) {
+			error = 'Invalid passkey type';
+			return;
+		}
+
+		// Complete authentication
+		isLoading = true;
+		const finish_response = await fetch('/api/v1/auth/discoverable/finish', {
+			method: 'POST',
+			body: JSON.stringify(credential.toJSON()),
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			credentials: 'include'
+		});
+		if (!finish_response.ok) {
+			error = 'Failed to log in: ' + (await finish_response.text());
+			isLoading = false;
+			return;
+		}
+		// FIXME: redirect to home page
+		window.location.href = '/logout';
+	});
+
 	async function handleLogin(event: SubmitEvent) {
 		event.preventDefault();
+		if (conditionalAbortController) {
+			conditionalAbortController.abort();
+			conditionalAbortController = undefined;
+		}
 		error = undefined;
 		const formData = new FormData(event.target as HTMLFormElement);
 		console.log(formData);
@@ -24,7 +85,7 @@
 			if (start_reponse.status === 404) {
 				error = 'User not found';
 			} else {
-				error = 'Failed to login: ' + (await start_reponse.text());
+				error = 'Failed to log in: ' + (await start_reponse.text());
 			}
 			isLoading = false;
 			return;
@@ -35,10 +96,21 @@
 			mediation?: CredentialMediationRequirement;
 		};
 		const parsedPublicKey = PublicKeyCredential.parseRequestOptionsFromJSON(publicKey);
-		const credential = await navigator.credentials.get({
-			publicKey: parsedPublicKey,
-			mediation: mediation
-		});
+		let credential: Credential | null;
+		try {
+			credential = await navigator.credentials.get({
+				publicKey: parsedPublicKey,
+				mediation: mediation
+			});
+		} catch (e) {
+			isLoading = false;
+			if (e instanceof DOMException && e.name === 'NotAllowedError') {
+				error = 'Passkey operation was cancelled or was not allowed';
+			} else {
+				console.error("Passkey error:", e);
+			}
+			return;
+		}
 		if (!credential) {
 			error = 'No passkey found';
 			isLoading = false;

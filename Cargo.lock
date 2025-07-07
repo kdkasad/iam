@@ -814,8 +814,10 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "axum-extra",
+ "base64 0.22.1",
  "blake3",
  "chrono",
+ "cookie",
  "rand 0.9.1",
  "serde",
  "serde_json",
@@ -828,6 +830,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "webauthn-rs",
+ "webauthn-rs-proto",
 ]
 
 [[package]]

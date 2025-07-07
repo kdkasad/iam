@@ -31,6 +31,7 @@ CREATE TABLE passkeys (
     id BLOB PRIMARY KEY,
     user_id BLOB NOT NULL,
     passkey TEXT NOT NULL,
+    credential_id BLOB NOT NULL,
     display_name TEXT,
     created_at INTEGER NOT NULL,
     last_used_at INTEGER,
@@ -38,6 +39,7 @@ CREATE TABLE passkeys (
 ) STRICT;
 
 CREATE INDEX passkeys_user_id_index ON passkeys (user_id);
+CREATE UNIQUE INDEX passkeys_credential_id_index ON passkeys (credential_id);
 
 CREATE TABLE passkey_registrations (
     id BLOB PRIMARY KEY,
@@ -50,7 +52,7 @@ CREATE TABLE passkey_registrations (
 
 CREATE TABLE passkey_authentications (
     id BLOB PRIMARY KEY,
-    email TEXT NOT NULL,
+    email TEXT,
     state TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (email) REFERENCES users (email) ON DELETE CASCADE
