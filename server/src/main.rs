@@ -37,19 +37,27 @@ async fn main() -> ExitCode {
 
     // Create server config
     let origin = getenv_or_exit(vars::ORIGIN);
+    let parsed_origin = match Url::parse(&origin) {
+        Ok(origin) => origin,
+        Err(err) => {
+            error!(%origin, %err, "failed to create URL from given origin");
+            return ExitCode::FAILURE;
+        }
+    };
     let config = AppConfig {
         instance_name: match std::env::var(vars::SERVER_NAME) {
             Ok(name) => name,
             Err(VarError::NotPresent) => {
+                let default = parsed_origin.authority();
                 warn!(
-                    "{} is not set; defaulting to {}",
-                    vars::SERVER_NAME,
-                    &origin
+                    var = %vars::SERVER_NAME,
+                    %default,
+                    "variable not set; using default",
                 );
                 origin.clone()
             }
             Err(VarError::NotUnicode(_)) => {
-                error!("{} is not valid UTF-8", vars::SERVER_NAME);
+                error!(var = %vars::SERVER_NAME, "environment variable is not valid UTF-8");
                 return ExitCode::FAILURE;
             }
         },
@@ -59,40 +67,33 @@ async fn main() -> ExitCode {
     let db = match get_db_client().await {
         Ok(db) => db,
         Err(choice_str) => {
-            error!(choice = choice_str, "Invalid database backend choice");
+            error!(choice = %choice_str, "invalid database backend choice");
             return ExitCode::FAILURE;
         }
     };
 
     // Create WebAuthn client
-    let parsed_origin = match Url::parse(&origin) {
-        Ok(origin) => origin,
-        Err(err) => {
-            error!("failed to create URL from given origin: {err}");
-            return ExitCode::FAILURE;
-        }
-    };
     let rp_id = std::env::var(vars::RP_ID).unwrap_or_else(|err| match err {
         VarError::NotPresent => parsed_origin.to_string(),
-        VarError::NotUnicode(os_string) => {
-            error!("{} is not valid UTF-8: {os_string:?}", vars::RP_ID);
+        VarError::NotUnicode(_) => {
+            error!(var = %vars::RP_ID, "environment variable is not valid UTF-8");
             std::process::exit(1);
         }
     });
-    info!("Creating WebAuthn manager with RP ID {rp_id} and origin {parsed_origin}");
+    info!(%rp_id, origin = %parsed_origin, "creating WebAuthn manager");
     let webauthn = WebauthnBuilder::new(&rp_id, &parsed_origin)
         .unwrap()
         .rp_name(&config.instance_name)
         .build()
-        .unwrap_or_exit(|err| error!("failed to build WebAuthn manager: {err}"));
+        .unwrap_or_exit(|err| error!(%err, "failed to build WebAuthn manager"));
 
     let api = new_api_router(db, webauthn, config);
 
     let static_dir = PathBuf::from(std::env::var_os(vars::STATIC_DIR).unwrap_or_else(|| {
         warn!(
-            "{} is not set; using default of {}",
-            vars::STATIC_DIR,
-            defaults::STATIC_DIR
+            var = %vars::STATIC_DIR,
+            default = %defaults::STATIC_DIR,
+            "variable not set; using default",
         );
         OsString::from(defaults::STATIC_DIR)
     }));
@@ -121,10 +122,10 @@ async fn main() -> ExitCode {
     let listener = TcpListener::bind(defaults::LISTEN_ADDR)
         .await
         .unwrap_or_exit(|err| {
-            error!("failed to listen on {}: {err}", defaults::LISTEN_ADDR);
+            error!(%err, address = %defaults::LISTEN_ADDR, "failed to start listener");
         });
     axum::serve(listener, router).await.unwrap_or_exit(|err| {
-        error!("failed to start server: {err}");
+        error!(%err, "failed to start server");
     });
 
     ExitCode::SUCCESS
@@ -133,7 +134,7 @@ async fn main() -> ExitCode {
 /// Calls [`std::env::var(name)`][std::env::var] and if that fails, exits the program after printing an error message.
 fn getenv_or_exit(name: &str) -> String {
     std::env::var(name).unwrap_or_exit(|_| {
-        error!("{name} is not set");
+        error!(var = %name, "environment variable is not set");
     })
 }
 
@@ -144,7 +145,7 @@ async fn get_db_client() -> Result<Arc<dyn DatabaseClient>, String> {
     let db: Arc<dyn DatabaseClient> = match db_choice.as_str() {
         #[cfg(feature = "sqlite3")]
         "sqlite3" | "sqlite" => Arc::new(SqliteClient::open().await.unwrap_or_exit(|err| {
-            error!("failed to open database: {err}");
+            error!(%err, "failed to open database");
         })),
         _ => return Err(db_choice),
     };
