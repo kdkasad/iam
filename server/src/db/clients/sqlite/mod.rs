@@ -10,8 +10,8 @@ use crate::{
     db::interface::{DatabaseClient, DatabaseError},
     models::{
         EncodableHash, NewPasskeyCredential, PasskeyAuthenticationState, PasskeyCredential,
-        PasskeyCredentialUpdate, PasskeyRegistrationState, Tag, TagUpdate, User, UserCreate,
-        UserUpdate,
+        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionUpdate, Tag, TagUpdate,
+        User, UserCreate, UserUpdate,
     },
 };
 
@@ -616,7 +616,7 @@ impl DatabaseClient for SqliteClient {
 
     fn create_session<'a>(
         &self,
-        session: &'a crate::models::Session,
+        session: &'a Session,
     ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> {
         let pool = self.pool.clone();
         Box::pin(async move {
@@ -638,15 +638,59 @@ impl DatabaseClient for SqliteClient {
     fn get_session_by_id_hash<'id>(
         &self,
         id_hash: &'id EncodableHash,
-    ) -> Pin<Box<dyn Future<Output = Result<crate::models::Session, DatabaseError>> + Send + 'id>>
-    {
+    ) -> Pin<Box<dyn Future<Output = Result<Session, DatabaseError>> + Send + 'id>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            let session: crate::models::Session =
-                sqlx::query_as("SELECT * FROM sessions WHERE id_hash = $1")
-                    .bind(id_hash)
-                    .fetch_one(&pool)
-                    .await?;
+            let session: Session = sqlx::query_as("SELECT * FROM sessions WHERE id_hash = $1")
+                .bind(id_hash)
+                .fetch_one(&pool)
+                .await?;
+            Ok(session)
+        })
+    }
+
+    fn update_session<'a>(
+        &self,
+        id_hash: &'a EncodableHash,
+        update: &'a SessionUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<Session, DatabaseError>> + Send + 'a>> {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            if update.is_empty() {
+                return Err(DatabaseError::EmptyUpdate);
+            }
+
+            let mut query_parts = Vec::new();
+            let mut has_state = false;
+            let mut has_expires_at = false;
+
+            if update.state.is_some() {
+                query_parts.push("state = ?");
+                has_state = true;
+            }
+
+            if update.expires_at.is_some() {
+                query_parts.push("expires_at = ?");
+                has_expires_at = true;
+            }
+
+            let query_str = format!(
+                "UPDATE sessions SET {}
+                WHERE id_hash = ?
+                RETURNING *",
+                query_parts.join(", ")
+            );
+
+            let mut query = sqlx::query_as::<_, Session>(&query_str);
+            if has_state {
+                query = query.bind(update.state.as_ref().unwrap());
+            }
+            if has_expires_at {
+                query = query.bind(update.expires_at.as_ref().unwrap().timestamp());
+            }
+            query = query.bind(id_hash);
+
+            let session: Session = query.fetch_one(&pool).await?;
             Ok(session)
         })
     }

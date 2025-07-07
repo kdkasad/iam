@@ -25,11 +25,12 @@ use webauthn_rs::prelude::{
 use webauthn_rs_proto::{AuthenticatorSelectionCriteria, ResidentKeyRequirement};
 
 use crate::{
-    api::v1::{ApiV1Error, V1State},
+    api::v1::{ApiV1Error, V1State, extractors::AuthenticatedSession},
     db::interface::DatabaseError,
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
-        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, User, UserCreate,
+        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, SessionUpdate,
+        User, UserCreate,
     },
 };
 
@@ -372,13 +373,26 @@ pub struct LogoutQueryParams {
 }
 
 pub async fn logout(
+    State(state): State<V1State>,
+    AuthenticatedSession(session): AuthenticatedSession,
     cookies: CookieJar,
     Query(query): Query<LogoutQueryParams>,
-) -> Either<(CookieJar, Redirect), CookieJar> {
+) -> Result<Either<(CookieJar, Redirect), CookieJar>, ApiV1Error> {
+    let session = state.db.get_session_by_id_hash(&session.id_hash).await?;
+    if session.state == SessionState::Active {
+        state
+            .db
+            .update_session(
+                &session.id_hash,
+                &SessionUpdate::new().with_state(SessionState::LoggedOut),
+            )
+            .await?;
+    }
     let new_cookies = cookies.remove(new_secure_cookie(SESSION_ID_COOKIE, ""));
-    if let Some(next) = query.next {
+    warn!("FIXME: Validate ?next parameter");
+    Ok(if let Some(next) = query.next {
         Either::E1((new_cookies, Redirect::to(&next)))
     } else {
         Either::E2(new_cookies)
-    }
+    })
 }

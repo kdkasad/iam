@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 use crate::models::{
     EncodableHash, NewPasskeyCredential, PasskeyAuthenticationState, PasskeyCredential,
-    PasskeyCredentialUpdate, PasskeyRegistrationState, Session, Tag, TagUpdate, User, UserCreate,
-    UserUpdate,
+    PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionUpdate, Tag, TagUpdate,
+    User, UserCreate, UserUpdate,
 };
 
 pub trait DatabaseClient: Send + Sync + 'static {
@@ -167,6 +167,12 @@ pub trait DatabaseClient: Send + Sync + 'static {
         &self,
         id_hash: &'id EncodableHash,
     ) -> Pin<Box<dyn Future<Output = Result<Session, DatabaseError>> + Send + 'id>>;
+
+    fn update_session<'a>(
+        &self,
+        id_hash: &'a EncodableHash,
+        update: &'a SessionUpdate,
+    ) -> Pin<Box<dyn Future<Output = Result<Session, DatabaseError>> + Send + 'a>>;
 }
 
 /// Error type for database operations

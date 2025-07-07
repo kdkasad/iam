@@ -7,8 +7,8 @@ use uuid::Uuid;
 #[repr(u8)]
 pub enum SessionState {
     Active,
-    Expired,
     Revoked,
+    LoggedOut,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -18,6 +18,32 @@ pub struct Session {
     pub state: SessionState,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, FromRow)]
+pub struct SessionUpdate {
+    pub state: Option<SessionState>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+impl SessionUpdate {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_state(mut self, state: SessionState) -> Self {
+        self.state = Some(state);
+        self
+    }
+
+    pub fn with_expires_at(mut self, expires_at: DateTime<Utc>) -> Self {
+        self.expires_at = Some(expires_at);
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.state.is_none() && self.expires_at.is_none()
+    }
 }
 
 mod encodable_hash {

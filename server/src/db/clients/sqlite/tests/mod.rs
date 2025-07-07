@@ -1,3 +1,4 @@
+use chrono::SubsecRound;
 use uuid::Uuid;
 use webauthn_rs::{
     Webauthn, WebauthnBuilder,
@@ -9,7 +10,8 @@ use crate::{
     db::interface::DatabaseClient,
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
-        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, UserCreate,
+        PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, SessionUpdate,
+        UserCreate,
     },
 };
 
@@ -334,4 +336,50 @@ async fn test_update_passkey() {
     // Get updated passkey and ensure counter is incremented
     let passkey = client.get_passkey_by_id(&pkid).await.unwrap();
     assert_eq!(passkey.passkey.0, passkey_incremented);
+}
+
+#[tokio::test]
+async fn test_update_session() {
+    let Tools { client, .. } = tools().await;
+
+    // Create user
+    let user_id = Uuid::new_v4();
+    let user = client
+        .create_user(
+            &user_id,
+            &UserCreate {
+                email: "test@kasad.com".to_string(),
+                display_name: "Test User".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    // Create session
+    let session_id: u64 = 123456789;
+    let session = Session {
+        user_id: *user.id(),
+        id_hash: blake3::hash(&session_id.to_le_bytes()).into(),
+        state: SessionState::Active,
+        created_at: chrono::Utc::now(),
+        expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+    };
+    client.create_session(&session).await.unwrap();
+
+    // Update state
+    let update = SessionUpdate::new().with_state(SessionState::LoggedOut);
+    let session = client
+        .update_session(&session.id_hash, &update)
+        .await
+        .unwrap();
+    assert_eq!(session.state, SessionState::LoggedOut);
+
+    // Update expires_at
+    let new_expires_at = chrono::Utc::now() + chrono::Duration::days(2);
+    let update = SessionUpdate::new().with_expires_at(new_expires_at);
+    let session = client
+        .update_session(&session.id_hash, &update)
+        .await
+        .unwrap();
+    assert_eq!(session.expires_at, new_expires_at.trunc_subsecs(0));
 }
