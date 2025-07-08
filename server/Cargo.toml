@@ -9,7 +9,7 @@ repository.workspace = true
 readme.workspace = true
 
 [features]
-# default = ["sqlite3"]
+default = ["sqlite3"]
 sqlite3 = ["sqlx"]
 sqlx = ["dep:sqlx"]
 
