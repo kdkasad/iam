@@ -64,7 +64,10 @@ CREATE TABLE sessions (
     state INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
     expires_at INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    is_admin INTEGER NOT NULL,
+    parent_id_hash BLOB,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id_hash) REFERENCES sessions (id_hash) ON DELETE RESTRICT
 ) STRICT;
 
 CREATE INDEX sessions_user_id_index ON sessions (user_id);

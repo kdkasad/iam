@@ -131,6 +131,8 @@ async fn test_create_session() {
         state: SessionState::Active,
         created_at: chrono::Utc::now(),
         expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+        is_admin: false,
+        parent_id_hash: None,
     };
     client.create_session(&session).await.unwrap();
 }
@@ -159,6 +161,8 @@ async fn test_get_session_by_id_hash() {
         state: SessionState::Active,
         created_at: chrono::Utc::now(),
         expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+        is_admin: false,
+        parent_id_hash: None,
     };
     client.create_session(&session).await.unwrap();
 
@@ -366,6 +370,8 @@ async fn test_update_session() {
         state: SessionState::Active,
         created_at: chrono::Utc::now(),
         expires_at: chrono::Utc::now() + chrono::Duration::days(1),
+        is_admin: false,
+        parent_id_hash: None,
     };
     client.create_session(&session).await.unwrap();
 

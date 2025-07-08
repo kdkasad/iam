@@ -1,13 +1,11 @@
-use axum::http::request::Parts;
-use axum_extra::extract::CookieJar;
+use axum::{RequestPartsExt, http::request::Parts};
+use axum_extra::extract::{Cached, CookieJar};
 
 use crate::{
     api::v1::{ApiV1Error, V1State, auth::SESSION_ID_COOKIE},
     db::interface::DatabaseError,
-    models::{EncodableHash, Session, SessionState, Tag},
+    models::{EncodableHash, Session, SessionState},
 };
-
-const ADMIN_TAG_NAME: &str = "iam::admin";
 
 #[derive(Debug, Clone)]
 pub struct AuthenticatedSession(pub Session);
@@ -20,7 +18,7 @@ impl axum::extract::FromRequestParts<V1State> for AuthenticatedSession {
         state: &V1State,
     ) -> Result<Self, Self::Rejection> {
         // Get session ID hash from cookie
-        let cookies = CookieJar::from_request_parts(parts, state).await.unwrap();
+        let Cached(cookies): Cached<CookieJar> = parts.extract_with_state(state).await.unwrap();
         let Some(session_id_cookie) = cookies.get(SESSION_ID_COOKIE) else {
             return Err(ApiV1Error::NotLoggedIn);
         };
@@ -48,11 +46,8 @@ impl axum::extract::FromRequestParts<V1State> for AuthenticatedSession {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct AdminSession {
-    pub session: Session,
-    pub tags: Vec<Tag>,
-}
+#[expect(dead_code)]
+pub struct AdminSession(pub Session);
 
 impl axum::extract::FromRequestParts<V1State> for AdminSession {
     type Rejection = ApiV1Error;
@@ -62,14 +57,10 @@ impl axum::extract::FromRequestParts<V1State> for AdminSession {
         state: &V1State,
     ) -> Result<Self, Self::Rejection> {
         // Get authenticated session
-        let session = AuthenticatedSession::from_request_parts(parts, state).await?;
-        // Ensure user has admin tag
-        let tags = state.db.get_tags_by_user_id(&session.0.user_id).await?;
-        if tags.iter().any(|t| t.name() == ADMIN_TAG_NAME) {
-            Ok(AdminSession {
-                session: session.0,
-                tags,
-            })
+        let AuthenticatedSession(session) = parts.extract_with_state(state).await?;
+        // Ensure session has admin privilege
+        if session.is_admin {
+            Ok(AdminSession(session))
         } else {
             Err(ApiV1Error::NotAdmin)
         }

@@ -9,6 +9,8 @@ pub enum SessionState {
     Active,
     Revoked,
     LoggedOut,
+    /// Session was upgraded or downgraded.
+    Superseded,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +21,10 @@ pub struct Session {
     pub state: SessionState,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// Whether this session has admin privileges.
+    pub is_admin: bool,
+    /// Session ID hash of this session's parent, if it has one.
+    pub parent_id_hash: Option<EncodableHash>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

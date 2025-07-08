@@ -66,6 +66,8 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: &AppConfi
             "/auth/discoverable/finish",
             post(auth::finish_conditional_ui_authentication),
         )
+        .route("/auth/upgrade", post(auth::upgrade_session))
+        .route("/auth/downgrade", post(auth::downgrade_session))
         .layer(SetResponseHeaderLayer::appending(
             VARY,
             HeaderValue::from_static("Cookie"),
@@ -128,6 +130,9 @@ enum ApiV1Error {
 
     #[error("Authentication failed: {0}")]
     AuthFailed(#[source] webauthn_rs::prelude::WebauthnError),
+
+    #[error("Session downgrade impossible")]
+    DowngradeImpossible,
 }
 
 impl From<DatabaseError> for ApiV1Error {
@@ -145,9 +150,10 @@ impl IntoResponse for ApiV1Error {
         use ApiV1Error::*;
         let status = match self {
             WebAuthn(_) | InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            InvalidAuthenticationId | InvalidRegistrationId | InvalidSessionId => {
-                StatusCode::BAD_REQUEST
-            }
+            InvalidAuthenticationId
+            | InvalidRegistrationId
+            | InvalidSessionId
+            | DowngradeImpossible => StatusCode::BAD_REQUEST,
             UserNotFound | NotFound => StatusCode::NOT_FOUND,
             NotLoggedIn | SessionExpired | NotAdmin | AuthFailed(_) => StatusCode::UNAUTHORIZED,
         };

@@ -621,14 +621,16 @@ impl DatabaseClient for SqliteClient {
         let pool = self.pool.clone();
         Box::pin(async move {
             sqlx::query(
-                "INSERT INTO sessions (id_hash, user_id, created_at, expires_at, state)
-                VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO sessions (id_hash, user_id, created_at, expires_at, state, is_admin, parent_id_hash)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)",
             )
             .bind(session.id_hash)
             .bind(session.user_id)
             .bind(session.created_at.timestamp())
             .bind(session.expires_at.timestamp())
             .bind(session.state)
+            .bind(session.is_admin)
+            .bind(session.parent_id_hash)
             .execute(&pool)
             .await?;
             Ok(())

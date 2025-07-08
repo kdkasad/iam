@@ -8,7 +8,7 @@ use axum::{
 use axum_extra::{
     either::Either,
     extract::{
-        CookieJar,
+        Cached, CookieJar,
         cookie::{Cookie, Expiration, SameSite},
     },
 };
@@ -26,17 +26,18 @@ use webauthn_rs_proto::{AuthenticatorSelectionCriteria, ResidentKeyRequirement};
 
 use crate::{
     api::v1::{ApiV1Error, V1State, extractors::AuthenticatedSession},
-    db::interface::DatabaseError,
+    db::interface::{DatabaseClient, DatabaseError},
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
         PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, SessionUpdate,
-        User, UserCreate, ViaJson,
+        Tag, User, UserCreate, ViaJson,
     },
 };
 
 const REGISTRATION_ID_COOKIE: &str = "registration_id";
 const AUTHENTICATION_ID_COOKIE: &str = "authentication_id";
 pub const SESSION_ID_COOKIE: &str = "session_id";
+const IS_ADMIN_COOKIE: &str = "session_is_admin";
 const SESSION_DURATION: chrono::Duration = chrono::Duration::days(1);
 
 fn new_secure_cookie<'a, K, V>(name: K, value: V) -> CookieBuilder<'a>
@@ -141,12 +142,9 @@ pub async fn finish_registration(
             return Err(err.into());
         }
     }
-    let (session, session_cookie) = new_session(&user);
-    state.db.create_session(&session).await?;
+    let (_session, cookies) = new_session(cookies, &*state.db, user.id(), false, None).await?;
     Ok((
-        cookies
-            .remove(new_secure_cookie(REGISTRATION_ID_COOKIE, ""))
-            .add(session_cookie),
+        cookies.remove(new_secure_cookie(REGISTRATION_ID_COOKIE, "")),
         Json(user),
     ))
 }
@@ -224,12 +222,9 @@ pub async fn finish_authentication(
         return Err(ApiV1Error::InvalidAuthenticationId);
     };
     let user = state.db.get_user_by_email(&email).await?;
-    let (session, session_cookie) = new_session(&user);
-    state.db.create_session(&session).await?;
+    let (_session, cookies) = new_session(cookies, &*state.db, user.id(), false, None).await?;
     Ok((
-        cookies
-            .remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, ""))
-            .add(session_cookie),
+        cookies.remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, "")),
         Json(user),
     ))
 }
@@ -341,30 +336,51 @@ pub async fn finish_conditional_ui_authentication(
 
     // Create a new session for the user
     let user = state.db.get_user_by_id(&user_id).await?;
-    let (session, session_cookie) = new_session(&user);
-    state.db.create_session(&session).await?;
+    let (_session, cookies) = new_session(cookies, &*state.db, user.id(), false, None).await?;
     Ok((
-        cookies
-            .remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, ""))
-            .add(session_cookie),
+        cookies.remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, "")),
         Json(user),
     ))
 }
 
-fn new_session(user: &User) -> (Session, Cookie<'static>) {
+async fn new_session(
+    mut cookies: CookieJar,
+    db: &dyn DatabaseClient,
+    user_id: &Uuid,
+    is_admin: bool,
+    parent: Option<&Session>,
+) -> Result<(Session, CookieJar), DatabaseError> {
+    // Create session
     let mut id = [0u8; 32]; // 256 bits
     rand::rng().fill_bytes(&mut id);
     let id_hash = blake3::hash(&id);
     let session = Session {
         id_hash: id_hash.into(),
-        user_id: *user.id(),
+        user_id: *user_id,
         state: SessionState::Active,
         created_at: chrono::Utc::now(),
         expires_at: chrono::Utc::now() + SESSION_DURATION,
+        is_admin,
+        parent_id_hash: parent.map(|p| p.id_hash),
     };
-    let cookie =
-        new_secure_cookie(SESSION_ID_COOKIE, id_hash.to_string()).max_age(Duration::days(1));
-    (session, cookie.into())
+
+    // Store session in database
+    db.create_session(&session).await?;
+
+    // Set session cookie
+    cookies = cookies
+        .add(new_secure_cookie(SESSION_ID_COOKIE, id_hash.to_string()).max_age(Duration::days(1)));
+
+    // Set admin marker cookie.
+    // admin cookie is not HTTP-only so the UI can detect whether the session is admin or not.
+    let is_admin_cookie = new_secure_cookie(IS_ADMIN_COOKIE, "y").http_only(false);
+    cookies = if is_admin {
+        cookies.add(is_admin_cookie)
+    } else {
+        cookies.remove(is_admin_cookie)
+    };
+
+    Ok((session, cookies))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -375,7 +391,7 @@ pub struct LogoutQueryParams {
 pub async fn logout(
     State(state): State<V1State>,
     AuthenticatedSession(session): AuthenticatedSession,
-    cookies: CookieJar,
+    Cached(cookies): Cached<CookieJar>,
     Query(query): Query<LogoutQueryParams>,
 ) -> Result<Either<(CookieJar, Redirect), CookieJar>, ApiV1Error> {
     let session = state.db.get_session_by_id_hash(&session.id_hash).await?;
@@ -395,4 +411,83 @@ pub async fn logout(
     } else {
         Either::E2(new_cookies)
     })
+}
+
+/// Describes what kind of session upgrade to perform.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "target", rename_all = "camelCase")]
+pub enum UpgradeTarget {
+    Admin,
+    // User { user_id: Uuid },
+}
+
+/// Upgrades a session, e.g. from regular user to admin privileges.
+pub async fn upgrade_session(
+    State(state): State<V1State>,
+    Cached(cookies): Cached<CookieJar>,
+    AuthenticatedSession(session): AuthenticatedSession,
+    Json(target): Json<UpgradeTarget>,
+) -> Result<CookieJar, ApiV1Error> {
+    // Check if user has admin tag
+    let tags = state.db.get_tags_by_user_id(&session.user_id).await?;
+    if !tags
+        .iter()
+        .map(Tag::name)
+        .any(|tag_name| tag_name == "iam::admin")
+    {
+        return Err(ApiV1Error::NotAdmin);
+    }
+
+    match target {
+        UpgradeTarget::Admin => {
+            // Create new admin session
+            let (_session, cookies) =
+                new_session(cookies, &*state.db, &session.user_id, true, Some(&session)).await?;
+            // Invalidate current session
+            supersede_session(&*state.db, &session).await?;
+            Ok(cookies)
+        }
+    }
+}
+
+/// Downgrade a session that was previously upgraded.
+pub async fn downgrade_session(
+    State(state): State<V1State>,
+    Cached(mut cookies): Cached<CookieJar>,
+    AuthenticatedSession(session): AuthenticatedSession,
+) -> Result<CookieJar, ApiV1Error> {
+    if let Some(parent_id_hash) = session.parent_id_hash {
+        let parent_session = state.db.get_session_by_id_hash(&parent_id_hash).await?;
+        // We can't actually return to the parent session since we don't know the non-hashed ID, so we
+        // create a new one with the same privileges.
+        (_, cookies) = new_session(
+            cookies,
+            &*state.db,
+            &parent_session.user_id,
+            parent_session.is_admin,
+            Some(&session),
+        )
+        .await?;
+        // Invalidate the current session
+        supersede_session(&*state.db, &session).await?;
+        Ok(cookies)
+    } else {
+        Err(ApiV1Error::DowngradeImpossible)
+    }
+}
+
+/// Mark the given session as ugraded/downgraded.
+async fn supersede_session(
+    db: &dyn DatabaseClient,
+    session: &Session,
+) -> Result<(), DatabaseError> {
+    db.update_session(
+        &session.id_hash,
+        &SessionUpdate {
+            state: Some(SessionState::Superseded),
+            expires_at: None,
+        },
+    )
+    .await?;
+    Ok(())
 }
