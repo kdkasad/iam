@@ -7,6 +7,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import { appConfig } from '$lib/app-config';
+	import { AtSignIcon, IdCardIcon } from '@lucide/svelte';
 
 	let {
 		ref = $bindable(null),
@@ -41,7 +42,8 @@
 					<span class="sr-only">{$appConfig.instanceName}</span>
 				</div>
 				<h1 class="text-xl font-bold">
-						{register ? 'Create an account for' : 'Log in to'} {$appConfig.instanceName}
+					{register ? 'Create an account for' : 'Log in to'}
+					{$appConfig.instanceName}
 				</h1>
 				<div class="text-center text-sm">
 					{#if register}
@@ -65,6 +67,7 @@
 						autocomplete="email webauthn"
 						required
 						disabled={isLoading}
+						icon={AtSignIcon}
 					/>
 				</div>
 
@@ -79,6 +82,7 @@
 							autocomplete="name"
 							required
 							disabled={isLoading}
+							icon={IdCardIcon}
 						/>
 					</div>
 				{/if}
