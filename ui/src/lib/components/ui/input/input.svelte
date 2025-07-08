@@ -49,7 +49,7 @@
 				'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
 				'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
 				'peer',
-				Icon ? 'pl-10' : '',
+				Icon ? 'pl-8' : '',
 				className
 			)}
 			{type}
@@ -59,7 +59,7 @@
 	{/snippet}
 	{#if Icon}
 		<div class="relative">
-			<Icon class="text-muted-foreground absolute left-2.5 top-1/2 size-5 -translate-y-1/2" />
+			<Icon class="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2 select-none" />
 			{@render input()}
 		</div>
 	{:else}
