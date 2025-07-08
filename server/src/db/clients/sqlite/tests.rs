@@ -188,7 +188,8 @@ async fn test_create_passkey() {
         )
         .await
         .unwrap();
-    let passkey: Passkey = serde_json::from_str(include_str!("resources/passkey.json")).unwrap();
+    let passkey: Passkey =
+        serde_json::from_str(include_str!("tests/resources/passkey.json")).unwrap();
     client
         .create_passkey(
             &Uuid::new_v4(),
@@ -219,7 +220,8 @@ async fn test_non_discoverable_passkey_authentication() {
         .unwrap();
 
     // Create passkey data
-    let passkey: Passkey = serde_json::from_str(include_str!("resources/passkey.json")).unwrap();
+    let passkey: Passkey =
+        serde_json::from_str(include_str!("tests/resources/passkey.json")).unwrap();
     let (_, auth_state) = webauthn.start_passkey_authentication(&[passkey]).unwrap();
     let state = PasskeyAuthenticationState {
         id: Uuid::new_v4(),
@@ -290,9 +292,10 @@ async fn test_update_passkey() {
     let Tools { client, .. } = tools().await;
 
     // Load passkeys from JSON files
-    let passkey: Passkey = serde_json::from_str(include_str!("resources/passkey.json")).unwrap();
+    let passkey: Passkey =
+        serde_json::from_str(include_str!("tests/resources/passkey.json")).unwrap();
     let passkey_incremented: Passkey =
-        serde_json::from_str(include_str!("resources/passkey-incremented.json")).unwrap();
+        serde_json::from_str(include_str!("tests/resources/passkey-incremented.json")).unwrap();
 
     // Create user for foreign key constraints
     let user_id = Uuid::new_v4();
