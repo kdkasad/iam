@@ -54,7 +54,7 @@ async fn main() -> ExitCode {
                     %default,
                     "variable not set; using default",
                 );
-                origin.clone()
+                default.to_string()
             }
             Err(VarError::NotUnicode(_)) => {
                 error!(var = %vars::SERVER_NAME, "environment variable is not valid UTF-8");
