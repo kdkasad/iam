@@ -10,6 +10,7 @@ use webauthn_rs::Webauthn;
 use crate::{db::interface::DatabaseClient, models::AppConfig};
 
 mod middleware;
+mod utils;
 mod v1;
 
 /// Maximum request payload size in bytes
@@ -19,7 +20,7 @@ const MAX_REQUEST_PAYLOAD_BYTES: usize = 8 * 1024; // 8 KiB
 pub fn new_api_router(
     db: Arc<dyn DatabaseClient>,
     webauthn: Webauthn,
-    config: AppConfig,
+    config: &AppConfig,
 ) -> Router<()> {
     Router::new()
         .nest_service("/v1", v1::router(db, webauthn, config))

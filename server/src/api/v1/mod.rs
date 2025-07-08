@@ -14,7 +14,7 @@ use tower_http::{
 use webauthn_rs::Webauthn;
 
 use crate::{
-    api::middleware::CacheControlLayer,
+    api::{middleware::CacheControlLayer, utils::PreSerializedJson},
     db::interface::{DatabaseClient, DatabaseError},
     models::AppConfig,
 };
@@ -29,13 +29,17 @@ mod user;
 struct V1StateInner {
     db: Arc<dyn DatabaseClient>,
     webauthn: Webauthn,
-    config: Arc<AppConfig>,
+    config: PreSerializedJson<AppConfig>,
 }
 
 type V1State = Arc<V1StateInner>;
 
 /// Returns a sub-router for `/api/v1`
-pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig) -> Router<()> {
+///
+/// # Panics
+///
+/// Panics if serializing the given `config` into JSON fails.
+pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: &AppConfig) -> Router<()> {
     // Public (cross-origin allowed) router
     let router_public: Router<V1State> = Router::new().route("/health", get(async || ())).layer(
         CorsLayer::new()
@@ -82,7 +86,7 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: AppConfig
     let state = V1StateInner {
         db,
         webauthn,
-        config: Arc::new(config),
+        config: PreSerializedJson::new(config).expect("serializing app config failed"),
     };
     router_public
         .merge(router_auth)
