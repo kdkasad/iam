@@ -392,3 +392,45 @@ async fn test_update_session() {
         .unwrap();
     assert_eq!(session.expires_at, new_expires_at.trunc_subsecs(0));
 }
+
+#[tokio::test]
+async fn test_cleanup_registrations() {
+    let Tools { client, .. } = tools().await;
+
+    // Create expired registration
+    sqlx::query("INSERT INTO passkey_registrations (id, user_id, email, registration, created_at) VALUES (?, ?, ?, ?, unixepoch() - 3600)")
+        .bind(Uuid::new_v4())
+        .bind(Uuid::new_v4())
+        .bind("test@kasad.com")
+        .bind("{}")
+        .execute(&client.pool)
+        .await
+        .unwrap();
+
+    // Create non-expired registration
+    sqlx::query("INSERT INTO passkey_registrations (id, user_id, email, registration, created_at) VALUES (?, ?, ?, ?, unixepoch())")
+        .bind(Uuid::new_v4())
+        .bind(Uuid::new_v4())
+        .bind("test@kasad.com")
+        .bind("{}")
+        .execute(&client.pool)
+        .await
+        .unwrap();
+
+    // Verify creations worked
+    let registrations: u32 = sqlx::query_scalar("SELECT COUNT(*) FROM passkey_registrations")
+        .fetch_one(&client.pool)
+        .await
+        .unwrap();
+    assert_eq!(registrations, 2);
+
+    // Cleanup
+    super::do_cleanup(&client.pool).await;
+
+    // Verify cleanup worked
+    let registrations: u32 = sqlx::query_scalar("SELECT COUNT(*) FROM passkey_registrations")
+        .fetch_one(&client.pool)
+        .await
+        .unwrap();
+    assert_eq!(registrations, 1);
+}

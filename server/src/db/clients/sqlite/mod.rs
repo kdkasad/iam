@@ -1,9 +1,11 @@
-use std::{env::VarError, pin::Pin};
+use std::{env::VarError, pin::Pin, time::Duration};
 
 use sqlx::{
     SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteSynchronous},
 };
+use tokio::task::{AbortHandle, JoinHandle};
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{
@@ -33,31 +35,55 @@ pub enum CreateSqliteClientError {
 #[derive(Debug, Clone)]
 pub struct SqliteClient {
     pool: SqlitePool,
+    cleanup_task_abort_handle: AbortHandle,
 }
 
 impl SqliteClient {
     /// Opens or creates the database at the path given by the `DB_PATH` environment variable.
     pub async fn open() -> Result<Self, CreateSqliteClientError> {
-        match std::env::var("DB_PATH") {
-            Ok(path) => Ok(Self {
-                pool: Self::do_open(
+        let pool = match std::env::var("DB_PATH") {
+            Ok(path) => {
+                Self::do_open(
                     SqliteConnectOptions::new()
                         .create_if_missing(true)
                         .filename(&path),
                 )
-                .await?,
-            }),
-            Err(VarError::NotPresent) => Err(CreateSqliteClientError::MissingEnv("DB_PATH")),
-            Err(VarError::NotUnicode(_)) => Err(CreateSqliteClientError::EnvNotUtf8("DB_PATH")),
-        }
+                .await?
+            }
+            Err(VarError::NotPresent) => {
+                return Err(CreateSqliteClientError::MissingEnv("DB_PATH"));
+            }
+            Err(VarError::NotUnicode(_)) => {
+                return Err(CreateSqliteClientError::EnvNotUtf8("DB_PATH"));
+            }
+        };
+        let cleanup_task = Self::spawn_cleanup_task(pool.clone());
+        Ok(Self {
+            pool,
+            cleanup_task_abort_handle: cleanup_task.abort_handle(),
+        })
     }
 
     /// Creates a client that uses a new in-memory database.
     pub async fn new_memory() -> Result<Self, CreateSqliteClientError> {
         // sqlx has some special handling for the in-memory database which only
         // happens when parsing from a URL string
+        let pool = Self::do_open("sqlite://:memory:".parse().unwrap()).await?;
+        let cleanup_task = Self::spawn_cleanup_task(pool.clone());
         Ok(Self {
-            pool: Self::do_open("sqlite://:memory:".parse().unwrap()).await?,
+            pool,
+            cleanup_task_abort_handle: cleanup_task.abort_handle(),
+        })
+    }
+
+    /// Creates a task that runs in the background and cleans up expired passkey registrations and authentications every 5 minutes.
+    /// Returns the [`JoinHandle`] for the task.
+    fn spawn_cleanup_task(pool: SqlitePool) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(5 * 60)).await;
+                do_cleanup(&pool).await;
+            }
         })
     }
 
@@ -75,6 +101,13 @@ impl SqliteClient {
             .await?;
 
         Ok(pool)
+    }
+}
+
+impl Drop for SqliteClient {
+    fn drop(&mut self) {
+        self.cleanup_task_abort_handle.abort();
+        _ = self.pool.close();
     }
 }
 
@@ -695,6 +728,24 @@ impl DatabaseClient for SqliteClient {
             let session: Session = query.fetch_one(&pool).await?;
             Ok(session)
         })
+    }
+}
+
+/// Cleans up expired passkey registrations and authentications.
+pub async fn do_cleanup(pool: &SqlitePool) {
+    if let Err(err) =
+        sqlx::query("DELETE FROM passkey_registrations WHERE created_at < unixepoch() - 300")
+            .execute(pool)
+            .await
+    {
+        error!(%err, "failed to cleanup passkey registrations");
+    }
+    if let Err(err) =
+        sqlx::query("DELETE FROM passkey_authentications WHERE created_at < unixepoch() - 300")
+            .execute(pool)
+            .await
+    {
+        error!(%err, "failed to cleanup passkey authentications");
     }
 }
 
