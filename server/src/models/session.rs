@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
+#[serde(rename_all = "kebab-case")]
 #[repr(u8)]
 pub enum SessionState {
     Active,
@@ -15,8 +16,11 @@ pub enum SessionState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
+#[serde(rename_all = "camelCase")]
 pub struct Session {
+    #[serde(skip_serializing)]
     pub id_hash: EncodableHash,
+    #[serde(skip_serializing)]
     pub user_id: Uuid,
     pub state: SessionState,
     pub created_at: DateTime<Utc>,
@@ -24,6 +28,7 @@ pub struct Session {
     /// Whether this session has admin privileges.
     pub is_admin: bool,
     /// Session ID hash of this session's parent, if it has one.
+    #[serde(skip_serializing)]
     pub parent_id_hash: Option<EncodableHash>,
 }
 

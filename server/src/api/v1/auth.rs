@@ -15,7 +15,7 @@ use axum_extra::{
 use base64::{Engine, prelude::BASE64_STANDARD};
 use cookie::{CookieBuilder, time::Duration};
 use rand::RngCore;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 use webauthn_rs::prelude::{
@@ -490,4 +490,19 @@ async fn supersede_session(
     )
     .await?;
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UserAndSessionInfo {
+    pub user: User,
+    pub session: Session,
+}
+
+/// Return the currently logged in user and session.
+pub async fn get_session(
+    State(state): State<V1State>,
+    AuthenticatedSession(session): AuthenticatedSession,
+) -> Result<Json<UserAndSessionInfo>, ApiV1Error> {
+    let user = state.db.get_user_by_id(&session.user_id).await?;
+    Ok(Json(UserAndSessionInfo { user, session }))
 }

@@ -68,6 +68,7 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: &AppConfi
         )
         .route("/auth/upgrade", post(auth::upgrade_session))
         .route("/auth/downgrade", post(auth::downgrade_session))
+        .route("/auth/session", get(auth::get_session))
         .layer(SetResponseHeaderLayer::appending(
             VARY,
             HeaderValue::from_static("Cookie"),
