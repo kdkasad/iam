@@ -6,8 +6,9 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn, type WithElementRef } from '$lib/utils.js';
-	import { appConfig } from '$lib/app-config';
 	import { AtSignIcon, IdCardIcon } from '@lucide/svelte';
+	import { getContext } from 'svelte';
+	import type { AppConfig } from '$lib/models';
 
 	let {
 		ref = $bindable(null),
@@ -24,6 +25,8 @@
 		onsubmit?: Pick<HTMLAttributes<HTMLFormElement>, 'onsubmit'>['onsubmit'];
 	} = $props();
 
+	let appConfig = getContext<AppConfig>('appConfig');
+
 	const id = $props.id();
 </script>
 
@@ -39,11 +42,11 @@
 							<UserLockIcon class="size-6" />
 						{/if}
 					</div>
-					<span class="sr-only">{$appConfig.instanceName}</span>
+					<span class="sr-only">{appConfig.instanceName}</span>
 				</div>
 				<h1 class="text-xl font-bold">
 					{register ? 'Create an account for' : 'Log in to'}
-					{$appConfig.instanceName}
+					{appConfig.instanceName}
 				</h1>
 				<div class="text-center text-sm">
 					{#if register}

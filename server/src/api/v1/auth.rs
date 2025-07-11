@@ -503,6 +503,7 @@ pub async fn get_session(
     State(state): State<V1State>,
     AuthenticatedSession(session): AuthenticatedSession,
 ) -> Result<Json<UserAndSessionInfo>, ApiV1Error> {
-    let user = state.db.get_user_by_id(&session.user_id).await?;
+    let mut user = state.db.get_user_by_id(&session.user_id).await?;
+    user.fetch_tags(&*state.db).await?;
     Ok(Json(UserAndSessionInfo { user, session }))
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import LoginForm from '$lib/components/login-form.svelte';
 
 	let isLoading = false;
@@ -65,7 +66,7 @@
 			return;
 		}
 		// FIXME: Redirect to home page
-		window.location.href = '/logout';
+		goto('/home');
 	}
 </script>
 

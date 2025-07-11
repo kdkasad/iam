@@ -1,7 +1,10 @@
-<script>
-	import { appConfig } from '$lib/app-config';
+<script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import type { AppConfig } from '$lib/models';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
+	import { getContext } from 'svelte';
+
+	let { instanceName } = getContext<AppConfig>('appConfig');
 </script>
 
 <div class="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
@@ -13,13 +16,13 @@
 						<div class="flex size-8 items-center justify-center rounded-md">
 							<LogOutIcon class="size-6" />
 						</div>
-						<span class="sr-only">{$appConfig.instanceName}</span>
+						<span class="sr-only">{instanceName}</span>
 					</div>
 					<h1 class="text-xl font-bold">
-						Log out of {$appConfig.instanceName}
+						Log out of {instanceName}
 					</h1>
 					<div class="text-center text-sm">
-						This will log you out of {$appConfig.instanceName}, but may not log you out of any sites
+						This will log you out of {instanceName}, but may not log you out of any sites
 						you're signed in to via SSO.
 					</div>
 					<Button type="submit" class="w-full mt-8">Log out</Button>

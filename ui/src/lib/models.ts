@@ -1,3 +1,7 @@
+export interface AppConfig {
+    instanceName: string;
+}
+
 export type Uuid = string;
 
 export interface User {
@@ -21,4 +25,12 @@ export interface Session {
     createdAt: string;
     expiresAt: string;
     isAdmin: boolean;
+}
+
+export interface Tag {
+    id: Uuid;
+    name: string;
+    createdAt: string; // FIXME: use a date type
+    updatedAt: string; // FIXME: use a date type
+    users?: User[];
 }

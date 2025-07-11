@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import LoginForm from '$lib/components/login-form.svelte';
 	import { onMount } from 'svelte';
 
@@ -58,7 +59,7 @@
 			return;
 		}
 		// FIXME: redirect to home page
-		window.location.href = '/logout';
+		goto('/home');
 	});
 
 	async function handleLogin(event: SubmitEvent) {
@@ -134,7 +135,7 @@
 			let data = await finish_response.json();
 			console.log(data);
 			// FIXME: redirect to home page
-			window.location.href = '/logout';
+			goto('/home');
 		} else {
 			error = 'Failed to login; please try again';
 		}

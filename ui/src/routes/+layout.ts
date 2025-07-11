@@ -1,4 +1,4 @@
-import type { AppConfig } from '$lib/app-config';
+import type { AppConfig } from '$lib/models';
 import type { LayoutLoad } from './$types';
 
 /**
@@ -16,9 +16,13 @@ export const load: LayoutLoad = async ({ fetch }) => {
         }
     } catch (error) {
         console.error("Failed to fetch server config in load function:", error);
+
+        // Fall back to the domain name
+        appConfig = {
+            instanceName: window.location.hostname
+        };
     }
 
-    // Fall back to the domain name if the fetch fails
     return {
         appConfig: appConfig,
     };

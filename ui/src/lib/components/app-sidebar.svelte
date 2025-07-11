@@ -1,9 +1,25 @@
 <script lang="ts">
-	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import { appConfig } from '$lib/app-config';
-	import { CommandIcon, FingerprintIcon, LayoutDashboard as LayoutDashboardIcon, Settings as SettingsIcon } from '@lucide/svelte';
+	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { useSidebar } from '$lib/components/ui/sidebar';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import {
+		ArrowRightIcon,
+		ChevronsUpDownIcon,
+		CommandIcon,
+		EllipsisIcon,
+		EllipsisVerticalIcon,
+		FingerprintIcon,
+		LayoutDashboard as LayoutDashboardIcon,
+		Settings as SettingsIcon,
+		ShieldUserIcon
+	} from '@lucide/svelte';
+	import SidebarUserPiece from './sidebar-pieces/user.svelte';
+	import type { AppConfig, User } from '$lib/models';
+	import { getContext, type ComponentProps } from 'svelte';
 
-	let { ref = $bindable(null), ...restProps } = $props();
+	let { ref = $bindable(null), ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
+
+	let appConfig = getContext<AppConfig>('appConfig');
 
 	const items = [
 		{
@@ -32,7 +48,7 @@
 								<FingerprintIcon class="size-4" />
 							</div>
 							<div class="grid flex-1 text-left text-sm leading-tight">
-								<span class="truncate font-medium">{$appConfig.instanceName}</span>
+								<span class="truncate font-medium">{appConfig.instanceName}</span>
 								<span class="truncate text-xs">IAM portal</span>
 							</div>
 						</div>
@@ -61,5 +77,7 @@
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
 	</Sidebar.Content>
-	<Sidebar.Footer />
+	<Sidebar.Footer>
+		<SidebarUserPiece />
+	</Sidebar.Footer>
 </Sidebar.Root>
