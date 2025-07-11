@@ -12,7 +12,8 @@
 	import type { Session, User } from '$lib/models';
 	import UpDownGradeDropdownItem from '../up-down-grade-dropdown-item.svelte';
 	import { getContext, setContext } from 'svelte';
-	import { canUpgrade as canUpgradeFn } from '$lib/logic';
+	import { canUpgrade as canUpgradeFn, nameToInitials } from '$lib/logic';
+	import * as Avatar from '$lib/components/ui/avatar';
 
 	const user = getContext<() => User>('user');
 	const session = getContext<() => Session>('session');
@@ -25,6 +26,14 @@
 	setContext<() => DropdownContext>('dropdown', () => ({ open: isDropdownOpen }));
 </script>
 
+{#snippet avatar()}
+	<Avatar.Root>
+		<Avatar.Fallback>
+			{nameToInitials(user().displayName)}
+		</Avatar.Fallback>
+	</Avatar.Root>
+{/snippet}
+
 <Sidebar.Menu>
 	<Sidebar.MenuItem>
 		<DropdownMenu.Root bind:open={isDropdownOpen}>
@@ -35,7 +44,7 @@
 						size="lg"
 						class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
 					>
-						<!-- FIXME: avatar -->
+						{@render avatar()}
 						<div class="grid flex-1 text-left text-sm leading-tight">
 							<span class="truncate font-medium">{user().displayName}</span>
 							<span class="truncate text-xs">{user().email}</span>
@@ -52,7 +61,7 @@
 			>
 				<DropdownMenu.Label class="p-0 font-normal">
 					<div class="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-						<!-- FIXME: avatar -->
+						{@render avatar()}
 						<div class="grid flex-1 text-left text-sm leading-tight">
 							<span class="truncate font-medium">{user().displayName}</span>
 							<span class="truncate text-xs">{user().email}</span>
