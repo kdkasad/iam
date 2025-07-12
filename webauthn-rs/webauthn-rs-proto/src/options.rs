@@ -38,6 +38,7 @@ use std::{collections::BTreeMap, str::FromStr};
 /// > legitimate credentials to not prompt for UV correctly due to browser perhipheral exchange
 /// > leading Webauthn RS to deny them in what should otherwise be legitimate operations.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[allow(non_camel_case_types)]
 #[serde(rename_all = "lowercase")]
 pub enum UserVerificationPolicy {
@@ -65,6 +66,7 @@ pub enum UserVerificationPolicy {
 
 /// Relying Party Entity
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RelyingParty {
     /// The name of the relying party.
@@ -76,6 +78,7 @@ pub struct RelyingParty {
 
 /// User Entity
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct User {
     /// The user's id in base64 form. This MUST be a unique id, and
@@ -93,6 +96,7 @@ pub struct User {
 
 /// Public key cryptographic parameters
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct PubKeyCredParams {
     /// The type of public-key credential.
     #[serde(rename = "type")]
@@ -103,6 +107,7 @@ pub struct PubKeyCredParams {
 
 /// <https://www.w3.org/TR/webauthn/#enumdef-attestationconveyancepreference>
 #[derive(Debug, Serialize, Clone, Deserialize, Default)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum AttestationConveyancePreference {
     /// Do not request attestation.
@@ -121,6 +126,7 @@ pub enum AttestationConveyancePreference {
 
 /// <https://www.w3.org/TR/webauthn/#enumdef-authenticatortransport>
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 #[allow(unused)]
 pub enum AuthenticatorTransport {
@@ -189,6 +195,7 @@ impl AsRef<str> for AuthenticatorTransport {
 ///
 /// <https://www.iana.org/assignments/webauthn/webauthn.xhtml>
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum AttestationFormat {
     /// Packed attestation
     #[serde(rename = "packed", alias = "Packed")]
@@ -237,6 +244,7 @@ impl TryFrom<&str> for AttestationFormat {
 
 /// <https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor>
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct PublicKeyCredentialDescriptor {
     /// The type of credential
     #[serde(rename = "type")]
@@ -254,6 +262,7 @@ pub struct PublicKeyCredentialDescriptor {
 ///
 /// <https://www.w3.org/TR/webauthn/#attachment>
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum AuthenticatorAttachment {
     /// Request a device that is part of the machine aka inseperable.
     /// <https://www.w3.org/TR/webauthn/#attachment>
@@ -269,6 +278,7 @@ pub enum AuthenticatorAttachment {
 ///
 /// <https://www.w3.org/TR/webauthn-3/#enumdef-publickeycredentialhints>
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[allow(unused)]
 pub enum PublicKeyCredentialHints {
@@ -284,6 +294,7 @@ pub enum PublicKeyCredentialHints {
 ///
 /// <https://www.w3.org/TR/webauthn-2/#enumdef-residentkeyrequirement>
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum ResidentKeyRequirement {
     /// <https://www.w3.org/TR/webauthn-2/#dom-residentkeyrequirement-discouraged>
@@ -298,6 +309,7 @@ pub enum ResidentKeyRequirement {
 
 /// <https://www.w3.org/TR/webauthn/#dictdef-authenticatorselectioncriteria>
 #[derive(Debug, Default, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AuthenticatorSelectionCriteria {
     /// How the authenticator should be attached to the client machine.
@@ -326,6 +338,7 @@ pub struct AuthenticatorSelectionCriteria {
 
 /// A descriptor of a credential that can be used.
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AllowCredentials {
     #[serde(rename = "type")]
     /// The type of credential.

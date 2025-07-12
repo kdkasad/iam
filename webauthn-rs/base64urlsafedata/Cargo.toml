@@ -15,9 +15,13 @@ repository = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+schemars = ["dep:schemars"]
+
 [dependencies]
 serde.workspace = true
 base64.workspace = true
+schemars = { workspace = true, optional = true }
 pastey = "0.1.0"
 
 [dev-dependencies]

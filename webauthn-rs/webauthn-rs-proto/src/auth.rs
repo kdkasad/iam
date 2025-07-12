@@ -12,6 +12,7 @@ use crate::BASE64_ENGINE;
 
 /// The requested options for the authentication
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PublicKeyCredentialRequestOptions {
     /// The challenge that should be signed by the authenticator.
@@ -38,6 +39,7 @@ pub struct PublicKeyCredentialRequestOptions {
 /// Request in residentkey workflows that conditional mediation should be used
 /// in the UI, or not.
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum Mediation {
     // /// No mediation is provided - This is represented by "None" on the Option
@@ -60,6 +62,7 @@ pub enum Mediation {
 /// to inspect or alter the content of the struct - you should serialise it
 /// and transmit it to the client only.
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RequestChallengeResponse {
     /// The options.
@@ -118,6 +121,7 @@ impl From<RequestChallengeResponse> for web_sys::CredentialRequestOptions {
 
 /// <https://w3c.github.io/webauthn/#authenticatorassertionresponse>
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AuthenticatorAssertionResponseRaw {
     /// Raw authenticator data.
     #[serde(rename = "authenticatorData")]
@@ -142,6 +146,7 @@ pub struct AuthenticatorAssertionResponseRaw {
 /// You should not need to handle the inner content of this structure - you should
 /// provide this to the correctly handling function of Webauthn only.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct PublicKeyCredential {
     /// The credential Id, likely base64
     pub id: String,

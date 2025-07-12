@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Valid credential protection policies
 #[derive(Debug, Serialize, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 #[repr(u8)]
 pub enum CredentialProtectionPolicy {
@@ -40,6 +41,7 @@ impl TryFrom<u8> for CredentialProtectionPolicy {
 ///
 /// <https://fidoalliance.org/specs/fido-v2.1-rd-20210309/fido-client-to-authenticator-protocol-v2.1-rd-20210309.html#sctn-credProtect-extension>
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CredProtect {
     /// The credential policy to enact
@@ -55,6 +57,7 @@ pub struct CredProtect {
 ///
 /// Implements \[AuthenticatorExtensionsClientInputs\] from the spec.
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RequestRegistrationExtensions {
     /// The `credProtect` extension options
@@ -154,6 +157,7 @@ impl Into<js_sys::Object> for &RequestRegistrationExtensions {
 ///
 /// <https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-hmac-secret-extension>
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct HmacGetSecretInput {
     /// Retrieve a symmetric secrets from the authenticator with this input.
@@ -166,6 +170,7 @@ pub struct HmacGetSecretInput {
 ///
 /// Implements \[AuthenticatorExtensionsClientInputs\] from the spec
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RequestAuthenticationExtensions {
     /// The `appid` extension options
@@ -225,6 +230,7 @@ impl Into<js_sys::Object> for &RequestAuthenticationExtensions {
 
 /// The response to a hmac get secret request.
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct HmacGetSecretOutput {
     /// Output of HMAC(Salt 1 || Client Secret)
@@ -236,6 +242,7 @@ pub struct HmacGetSecretOutput {
 /// <https://w3c.github.io/webauthn/#dictdef-authenticationextensionsclientoutputs>
 /// The default option here for Options are None, so it can be derived
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AuthenticationExtensionsClientOutputs {
     /// Indicates whether the client used the provided appid extension
     #[serde(default)]
@@ -283,6 +290,7 @@ impl From<web_sys::AuthenticationExtensionsClientOutputs>
 
 /// <https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension>
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct CredProps {
     /// A user agent supplied hint that this credential *may* have created a resident key. It is
     /// retured from the user agent, not the authenticator meaning that this is an unreliable
@@ -295,6 +303,7 @@ pub struct CredProps {
 /// <https://w3c.github.io/webauthn/#dictdef-authenticationextensionsclientoutputs>
 /// The default option here for Options are None, so it can be derived
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RegistrationExtensionsClientOutputs {
     /// Indicates whether the client used the provided appid extension

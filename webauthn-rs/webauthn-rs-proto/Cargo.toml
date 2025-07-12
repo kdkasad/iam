@@ -18,6 +18,7 @@ repository = { workspace = true }
 [features]
 default = []
 wasm = ["wasm-bindgen", "web-sys", "js-sys", "serde-wasm-bindgen"]
+schemars = ["dep:schemars"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
@@ -28,6 +29,7 @@ base64urlsafedata.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 url = { workspace = true, features = ["serde"] }
+schemars = { workspace = true, optional = true }
 
 # Webauthn Components
 wasm-bindgen = { version = "0.2", features = [

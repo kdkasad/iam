@@ -184,5 +184,28 @@ macro_rules! common_impls {
                 }
             }
         }
+
+        // Even though `HumanBinaryData` can serialize to different formats,
+        // `JsonSchema` is specific to JSON, which will always use the base64
+        // text format.
+        #[cfg(feature = "schemars")]
+        impl ::schemars::JsonSchema for $type {
+            fn schema_name() -> ::std::borrow::Cow<'static, str> {
+                ::std::borrow::Cow::Borrowed(::std::stringify!($type))
+            }
+
+            fn schema_id() -> ::std::borrow::Cow<'static, str> {
+                ::std::borrow::Cow::Borrowed(
+                    ::std::concat!(::std::module_path!(), "::", ::std::stringify!($type))
+                )
+            }
+
+            fn json_schema(_generator: &mut ::schemars::SchemaGenerator) -> ::schemars::Schema {
+                ::schemars::json_schema!({
+                    "type": "string",
+                    "pattern": r"^[a-zA-Z0-9_\-]*$",
+                })
+            }
+        }
     };
 }

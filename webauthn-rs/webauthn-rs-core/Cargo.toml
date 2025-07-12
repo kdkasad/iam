@@ -15,6 +15,7 @@ repository = { workspace = true }
 
 [features]
 default = []
+schemars = ["base64urlsafedata/schemars", "webauthn-rs-proto/schemars"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

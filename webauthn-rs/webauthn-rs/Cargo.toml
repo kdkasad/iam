@@ -29,6 +29,8 @@ danger-allow-state-serialisation = []
 danger-credential-internals = []
 danger-user-presence-only-security-keys = []
 
+schemars = ["base64urlsafedata/schemars", "webauthn-rs-core/schemars"]
+
 [dependencies]
 base64urlsafedata.workspace = true
 webauthn-rs-core.workspace = true

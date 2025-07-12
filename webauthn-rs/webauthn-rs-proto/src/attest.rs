@@ -12,6 +12,7 @@ use crate::BASE64_ENGINE;
 
 /// <https://w3c.github.io/webauthn/#dictionary-makecredentialoptions>
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PublicKeyCredentialCreationOptions {
     /// The relying party
@@ -57,6 +58,7 @@ pub struct PublicKeyCredentialCreationOptions {
 /// to inspect or alter the content of the struct - you should serialise it
 /// and transmit it to the client only.
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreationChallengeResponse {
     /// The options.
@@ -123,6 +125,7 @@ impl From<CreationChallengeResponse> for web_sys::CredentialCreationOptions {
 
 /// <https://w3c.github.io/webauthn/#authenticatorattestationresponse>
 #[derive(Debug, Serialize, Clone, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AuthenticatorAttestationResponseRaw {
     /// <https://w3c.github.io/webauthn/#dom-authenticatorattestationresponse-attestationobject>
     #[serde(rename = "attestationObject")]
@@ -145,6 +148,7 @@ pub struct AuthenticatorAttestationResponseRaw {
 /// provide this to the correctly handling function of Webauthn only.
 /// <https://w3c.github.io/webauthn/#iface-pkcredential>
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct RegisterPublicKeyCredential {
     /// The id of the PublicKey credential, likely in base64.
     ///
