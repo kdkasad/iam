@@ -1,0 +1,263 @@
+on: [ push, pull_request ]
+
+name: CI
+
+env:
+  VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - run: cargo fmt --check
+
+  build_and_test:
+    name: Other build/test
+    strategy:
+      fail-fast: false
+      matrix:
+        rust_version: [ stable, 1.85.0 ]
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_version }}
+          components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
+      - if: runner.os != 'windows'
+        run: |
+          sudo apt-get update && \
+          sudo apt-get -y install libdbus-1-dev libpcsclite-dev libudev-dev libusb-1.0-0-dev
+
+      - if: runner.os == 'windows'
+        uses: johnwason/vcpkg-action@v4
+        with:
+          pkgs: openssl
+          triplet: x64-windows-static-md
+          token: ${{ github.token }}
+      # Transitive dependency of wasm-bindgen; works around https://github.com/rustwasm/wasm-bindgen/issues/3918
+      - run: cargo update -p bumpalo --precise 3.14.0
+      - run: cargo build --workspace --exclude webauthn-authenticator-rs --exclude actix_web --exclude web_authn --exclude tide-server
+
+      # Don't run clippy on Windows, we only need to run it on Linux
+      - if: runner.os != 'windows'
+        run: cargo clippy --no-deps --workspace --exclude webauthn-authenticator-rs  --exclude actix_web --exclude web_authn --exclude tide-server --all-targets
+
+      - name: javascript feature clippy
+        if: runner.os != 'windows'
+        run: cargo clippy --no-deps --workspace --exclude webauthn-authenticator-rs  --exclude actix_web --exclude web_authn --exclude tide-server --all-targets --features javascript,bluetooth,nfc,usb
+      - name: WASM feature clippy
+        if: runner.os != 'windows'
+        run: cargo clippy --no-deps --workspace --exclude webauthn-authenticator-rs  --exclude actix_web --exclude web_authn --exclude tide-server --all-targets --features wasm,bluetooth,nfc,usb --no-default-features
+      - run: cargo test --workspace --exclude webauthn-authenticator-rs  --exclude actix_web --exclude web_authn --exclude tide-server
+
+      # Some clap errors manifest as panics at runtime. Running tools with
+      # --help should be enough to find an issue.
+      - run: cargo run --bin cable-tunnel-server-backend -- --help
+      - run: cargo run --bin cable-tunnel-server-frontend -- --help
+      - run: cargo run --bin fido-mds-tool -- --help
+      # fido-key-manager requires elevation on Windows, which cargo can't
+      # handle.
+      - if: runner.os != 'windows'
+        run: cargo run --bin fido-key-manager -- --help
+      - if: runner.os != 'windows'
+        run: cargo run --bin fido-key-manager --features solokey -- --help
+      - if: runner.os != 'windows'
+        run: cargo run --bin fido-key-manager --features yubikey -- --help
+
+  authenticator:
+    name: webauthn-authenticator-rs test
+    strategy:
+      fail-fast: false
+      matrix:
+        rust_version: [ stable, 1.85.0 ]
+        features:
+          - bluetooth
+          - cable
+          - nfc
+          - softpasskey
+          - softtoken
+          - usb
+          - bluetooth,nfc,usb,ctap2-management
+          - bluetooth,cable,cable-override-tunnel,ctap2-management,nfc,softpasskey,softtoken,usb,vendor-solokey,vendor-yubikey
+        os:
+          - ubuntu-latest
+          - windows-latest
+        include:
+          - os: windows-latest
+            features: win10
+            rust_version: stable
+          - os: windows-latest
+            features: bluetooth,cable,ctap2-management,nfc,softpasskey,softtoken,usb,win10
+            rust_version: stable
+        exclude:
+          - os: windows-latest
+            rust_version: 1.79.0
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_version }}
+          components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
+      - if: runner.os != 'windows'
+        run: |
+          sudo apt-get update && \
+          sudo apt-get -y install libudev-dev
+      - if: contains(matrix.features, 'nfc') && runner.os != 'windows'
+        run: sudo apt-get -y install libpcsclite-dev
+      - if: contains(matrix.features, 'usb') && runner.os != 'windows'
+        run: sudo apt-get -y install libusb-1.0-0-dev
+      - if: (contains(matrix.features, 'bluetooth') || contains(matrix.features, 'cable'))  && runner.os != 'windows'
+        run: sudo apt-get -y install libdbus-1-dev
+
+      # Don't try to install OpenSSL when there's only the "win10" feature
+      # enabled. We should be able to operate without it.
+      - if: runner.os == 'windows' && matrix.features != 'win10'
+        uses: johnwason/vcpkg-action@v4
+        with:
+          pkgs: openssl
+          triplet: x64-windows-static-md
+          token: ${{ github.token }}
+
+      - run: cargo build -p webauthn-authenticator-rs --features ${{ matrix.features }}
+
+      # Don't run clippy on Windows unless it is using a Windows-specific
+      # feature which wasn't checked on Linux.
+      - if: runner.os != 'windows' || contains(matrix.features, 'win10')
+        run: cargo clippy --no-deps -p webauthn-authenticator-rs --all-targets --features ${{ matrix.features }}
+      - if: runner.os != 'windows' || contains(matrix.features, 'win10')
+        run: cargo clippy --no-deps -p webauthn-authenticator-rs --all-targets --features ${{ matrix.features }},ui-cli
+      - if: runner.os != 'windows' || contains(matrix.features, 'win10')
+        run: cargo clippy --no-deps -p webauthn-authenticator-rs --all-targets --features ${{ matrix.features }},qrcode,ui-cli
+
+      # "ctap2-management" requires OpenSSL, which we won't have if built with
+      # only "win10" feature on Windows.
+      - if: runner.os != 'windows' || (contains(matrix.features, 'win10') && matrix.features != 'win10')
+        run: cargo clippy --no-deps -p webauthn-authenticator-rs --all-targets --features ${{ matrix.features }},ctap2-management
+      - if: runner.os != 'windows' || (contains(matrix.features, 'win10') && matrix.features != 'win10')
+        run: cargo clippy --no-deps -p webauthn-authenticator-rs --all-targets --features ${{ matrix.features }},ctap2-management,qrcode,ui-cli
+
+      - run: cargo test -p webauthn-authenticator-rs --features ${{ matrix.features }}
+
+      # Some clap errors manifest as panics at runtime. Running tools with
+      # --help should be enough to find an issue.
+
+      # authenticate example requires OpenSSL (via webauthn-rs-core), so don't
+      # run if features == 'win10'.
+      - if: runner.os != 'windows' || matrix.features != 'win10'
+        run: cargo run -p webauthn-authenticator-rs --example authenticate --features ${{ matrix.features }},ui-cli -- --help
+
+      # caBLE-specific examples. The "cable" feature requires OpenSSL, so this
+      # always OK to run on Windows.
+      - if: contains(matrix.features, 'cable')
+        run: cargo run -p webauthn-authenticator-rs --example authenticate --features ${{ matrix.features }},qrcode,ui-cli -- --help
+      - if: contains(matrix.features, 'cable')
+        run: cargo run -p webauthn-authenticator-rs --example cable_domain --features ${{ matrix.features }} -- --help
+      - if: contains(matrix.features, 'cable')
+        run: cargo run -p webauthn-authenticator-rs --example cable_tunnel --features ${{ matrix.features }},ui-cli -- --help
+
+      # SoftToken-specific examples.
+      - if: contains(matrix.features, 'softtoken')
+        run: cargo run -p webauthn-authenticator-rs --example softtoken --features ${{ matrix.features }} -- --help
+
+  docs:
+    name: Documentation
+    strategy:
+      fail-fast: false
+      matrix:
+        rust_version: [ stable, nightly ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_version }}
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - run: |
+          sudo apt-get update && \
+          sudo apt-get -y install libudev-dev
+
+      # Build documentation with zero dependencies / features.
+      #
+      # This tests that all the stubs work properly for optional dependencies,
+      # but doesn't work for fido-key-manager which includes NFC and USB support
+      # by default.
+      - name: generate docs
+        run: cargo ${{ matrix.rust_version == 'nightly' && '+nightly' || '' }} doc --all --exclude fido-key-manager --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: ${{ matrix.rust_version == 'nightly' && '--cfg docsrs' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-${{ matrix.rust_version }}
+          path: |
+            target/doc/
+            !target/doc/src/
+          if-no-files-found: error
+          retention-days: 14
+      - run: ./.github/check_built_docs.sh
+
+      # Build with all features
+      - run: |
+          sudo apt-get -y install libpcsclite-dev libusb-1.0-0-dev libdbus-1-dev
+      - run: cargo ${{ matrix.rust_version == 'nightly' && '+nightly' || '' }} doc --all --no-deps --document-private-items --all-features
+        env:
+          RUSTDOCFLAGS: ${{ matrix.rust_version == 'nightly' && '--cfg docsrs' || '' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docs-${{ matrix.rust_version }}-all_features
+          path: |
+            target/doc/
+            !target/doc/src/
+          if-no-files-found: error
+          retention-days: 14
+      - run: ./.github/check_built_docs.sh
+
+  tutorial:
+    name: Tutorial builds
+    strategy:
+      fail-fast: false
+      matrix:
+        rust_version: [ stable ]
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_version }}
+          components: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - if: runner.os == 'windows'
+        uses: johnwason/vcpkg-action@v4
+        with:
+          pkgs: openssl
+          triplet: x64-windows-static-md
+          token: ${{ github.token }}
+
+      - run: cargo build -p actix_tutorial -p axum_tutorial -p tide_tutorial

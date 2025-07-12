@@ -1,0 +1,35 @@
+[package]
+name = "sshkey-attest"
+description = "FIDO SK SSH Key Attestation"
+readme = "README.md"
+keywords = ["ssh", "openssh", "parser", "attestation", "fido"]
+categories = [
+    "authentication",
+    "cryptography",
+    "parser-implementations",
+    "encoding",
+]
+
+version = { workspace = true }
+authors = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+base64.workspace = true
+base64urlsafedata.workspace = true
+nom.workspace = true
+openssl.workspace = true
+serde.workspace = true
+serde_cbor_2.workspace = true
+sshkeys = { version = "0.3.3", features = ["serde"] }
+tracing.workspace = true
+uuid = { workspace = true, features = ["serde"] }
+webauthn-rs-core.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+webauthn-rs-device-catalog.workspace = true

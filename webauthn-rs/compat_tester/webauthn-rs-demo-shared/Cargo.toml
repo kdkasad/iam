@@ -1,0 +1,14 @@
+[package]
+name = "webauthn-rs-demo-shared"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+core = ["webauthn-rs-core"]
+
+[dependencies]
+base64urlsafedata.workspace = true
+serde.workspace = true
+
+webauthn-rs-core = { workspace = true, optional = true }
+webauthn-rs-proto = { workspace = true }

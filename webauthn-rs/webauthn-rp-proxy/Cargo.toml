@@ -1,0 +1,20 @@
+[package]
+name = "webauthn-rp-proxy"
+authors = ["Arthur A. Gleckler <aag@alum.mit.edu>"]
+readme = "README.md"
+description = "Webauthn RP CLI Proxy"
+
+version = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid = { workspace = true, features = ["serde"] }
+webauthn-rs = { workspace = true, features = ["danger-allow-state-serialisation"] }
