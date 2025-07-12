@@ -1,0 +1,47 @@
+[package]
+name = "fido-key-manager"
+categories = ["authentication"]
+description = "Management CLI for FIDO/CTAP 2.x authenticators"
+keywords = ["ctap", "fido", "passkeys", "webauthn"]
+readme = "README.md"
+build = "build.rs"
+
+version = { workspace = true }
+authors = { workspace = true }
+rust-version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[[bin]]
+name = "fido-key-manager"
+# cargo can't run binaries needing elevation on Windows, and there's no tests
+# here anyway.
+test = false
+
+[features]
+# Bluetooth support is flakey on Linux and Windows, so not enabled by default.
+bluetooth = ["webauthn-authenticator-rs/bluetooth"]
+nfc = ["webauthn-authenticator-rs/nfc"]
+usb = ["webauthn-authenticator-rs/usb"]
+solokey = ["webauthn-authenticator-rs/vendor-solokey"]
+yubikey = ["webauthn-authenticator-rs/vendor-yubikey"]
+
+default = ["nfc", "usb"]
+
+disable_windows_manifest = []
+
+[dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["ui-cli", "ctap2-management"] }
+
+clap.workspace = true
+hex.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+webauthn-rs-core.workspace = true
+
+[build-dependencies]
+embed-resource = "3"
