@@ -874,7 +874,6 @@ dependencies = [
  "blake3",
  "chrono",
  "cookie",
- "indexmap",
  "rand 0.9.1",
  "schemars",
  "serde",

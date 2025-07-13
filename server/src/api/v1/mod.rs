@@ -7,9 +7,12 @@ use aide::{
         routing::{get, post},
     },
     generate::GenContext,
-    openapi::{MediaType, Operation, Response as OapiResponse},
+    openapi::{
+        ApiKeyLocation, MediaType, OpenApi, Operation, Response as OapiResponse, SecurityScheme,
+    },
 };
 use axum::{
+    Router,
     http::{HeaderValue, Method, StatusCode, header::VARY},
     response::{IntoResponse, Response},
 };
@@ -46,11 +49,11 @@ type V1State = Arc<V1StateInner>;
 /// # Panics
 ///
 /// Panics if serializing the given `config` into JSON fails.
-pub fn router(
+pub fn router_and_spec(
     db: Arc<dyn DatabaseClient>,
     webauthn: Webauthn,
     config: &AppConfig,
-) -> ApiRouter<()> {
+) -> (Router<()>, OpenApi) {
     // Public (cross-origin allowed) router
     let router_public: ApiRouter<V1State> = ApiRouter::new()
         .api_route("/health", get(async || ()))
@@ -104,10 +107,24 @@ pub fn router(
         webauthn,
         config: PreSerializedJson::new(config).expect("serializing app config failed"),
     };
-    router_public
+    let mut openapi = OpenApi::default();
+    let router = router_public
         .merge(router_auth)
         .merge(router_unauthenticated)
         .with_state(Arc::new(state))
+        .finish_api_with(&mut openapi, |api| {
+            api.security_scheme(
+                "userSession",
+                SecurityScheme::ApiKey {
+                    location: ApiKeyLocation::Cookie,
+                    name: "session_id".to_string(),
+                    description: Some("A cookie containing the user's session ID. This is automatically set by the server when the user logs in.".to_string()),
+                    #[allow(clippy::default_trait_access, reason = "using the type would require a direct dependency on indexmap")]
+                    extensions: Default::default(),
+                },
+            )
+        });
+    (router, openapi)
 }
 
 #[derive(Debug, thiserror::Error)]

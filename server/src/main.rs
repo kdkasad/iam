@@ -87,7 +87,7 @@ async fn main() -> ExitCode {
         .build()
         .unwrap_or_exit(|err| error!(%err, "failed to build WebAuthn manager"));
 
-    let api = new_api_router(db, webauthn, &config);
+    let (api, _) = new_api_router(db, webauthn, &config);
 
     let static_dir = PathBuf::from(std::env::var_os(vars::STATIC_DIR).unwrap_or_else(|| {
         warn!(
@@ -100,7 +100,7 @@ async fn main() -> ExitCode {
     let ui = new_ui_server(&static_dir);
 
     let router = Router::new()
-        .nest("/api", api.into())
+        .nest("/api", api)
         .fallback_service(ui)
         .layer(SetResponseHeaderLayer::if_not_present(
             X_CONTENT_TYPE_OPTIONS,
