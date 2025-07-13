@@ -1,20 +1,14 @@
 use std::borrow::Cow;
 
-use axum::{
-    Json,
-    extract::{Query, State},
-    response::Redirect,
-};
-use axum_extra::{
-    either::Either,
-    extract::{
-        Cached, CookieJar,
-        cookie::{Cookie, Expiration, SameSite},
-    },
+use axum::{Json, extract::State};
+use axum_extra::extract::{
+    Cached, CookieJar,
+    cookie::{Cookie, Expiration, SameSite},
 };
 use base64::{Engine, prelude::BASE64_STANDARD};
 use cookie::{CookieBuilder, time::Duration};
 use rand::RngCore;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
@@ -88,7 +82,7 @@ pub async fn start_registration(
     ))
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct FinishRegistrationRequest {
     pub user: UserCreate,
     pub passkey: RegisterPublicKeyCredential,
@@ -149,7 +143,7 @@ pub async fn finish_registration(
     ))
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct AuthenticationStartRequest {
     pub email: String,
 }
@@ -383,17 +377,11 @@ async fn new_session(
     Ok((session, cookies))
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct LogoutQueryParams {
-    pub next: Option<String>,
-}
-
 pub async fn logout(
     State(state): State<V1State>,
     AuthenticatedSession(session): AuthenticatedSession,
     Cached(cookies): Cached<CookieJar>,
-    Query(query): Query<LogoutQueryParams>,
-) -> Result<Either<(CookieJar, Redirect), CookieJar>, ApiV1Error> {
+) -> Result<CookieJar, ApiV1Error> {
     let session = state.db.get_session_by_id_hash(&session.id_hash).await?;
     if session.state == SessionState::Active {
         state
@@ -405,17 +393,12 @@ pub async fn logout(
             .await?;
     }
     let new_cookies = cookies.remove(new_secure_cookie(SESSION_ID_COOKIE, ""));
-    warn!("FIXME: Validate ?next parameter");
-    Ok(if let Some(next) = query.next {
-        Either::E1((new_cookies, Redirect::to(&next)))
-    } else {
-        Either::E2(new_cookies)
-    })
+    Ok(new_cookies)
 }
 
 /// Describes what kind of session upgrade to perform.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "target", rename_all = "camelCase")]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(tag = "target")]
 pub enum UpgradeTarget {
     Admin,
     // User { user_id: Uuid },
@@ -492,7 +475,7 @@ async fn supersede_session(
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct UserAndSessionInfo {
     pub user: User,
     pub session: Session,

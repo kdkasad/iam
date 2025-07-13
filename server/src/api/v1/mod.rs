@@ -1,10 +1,17 @@
 use std::sync::Arc;
 
+use aide::{
+    OperationOutput,
+    axum::{
+        ApiRouter,
+        routing::{get, post},
+    },
+    generate::GenContext,
+    openapi::{MediaType, Operation, Response as OapiResponse},
+};
 use axum::{
-    Router,
     http::{HeaderValue, Method, StatusCode, header::VARY},
     response::{IntoResponse, Response},
-    routing::{get, post},
 };
 use chrono::Duration;
 use tower_http::{
@@ -39,36 +46,42 @@ type V1State = Arc<V1StateInner>;
 /// # Panics
 ///
 /// Panics if serializing the given `config` into JSON fails.
-pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: &AppConfig) -> Router<()> {
+pub fn router(
+    db: Arc<dyn DatabaseClient>,
+    webauthn: Webauthn,
+    config: &AppConfig,
+) -> ApiRouter<()> {
     // Public (cross-origin allowed) router
-    let router_public: Router<V1State> = Router::new().route("/health", get(async || ())).layer(
-        CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Method::GET)
-            .allow_credentials(false),
-    );
+    let router_public: ApiRouter<V1State> = ApiRouter::new()
+        .api_route("/health", get(async || ()))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Method::GET)
+                .allow_credentials(false),
+        );
 
     // Router for endpoints whose responses depend on authentication state.
-    let router_auth: Router<V1State> = Router::new()
-        .route("/users/{id}", get(user::get_user))
-        .route("/users", post(user::post_user))
-        .route("/users/me", get(user::get_current_user))
-        .route("/logout", post(auth::logout))
-        .route("/register/start", post(auth::start_registration))
-        .route("/register/finish", post(auth::finish_registration))
-        .route("/auth/start", post(auth::start_authentication))
-        .route("/auth/finish", post(auth::finish_authentication))
-        .route(
+    let router_auth: ApiRouter<V1State> = ApiRouter::new()
+        .api_route("/users/{id}", get(user::get_user))
+        .api_route("/users", post(user::post_user))
+        .api_route("/users/me", get(user::get_current_user))
+        .api_route("/logout", post(auth::logout))
+        .api_route("/register/start", post(auth::start_registration))
+        .api_route("/register/finish", post(auth::finish_registration))
+        .api_route("/auth/start", post(auth::start_authentication))
+        .api_route("/auth/finish", post(auth::finish_authentication))
+        .api_route(
             "/auth/discoverable/start",
             post(auth::start_conditional_ui_authentication),
         )
-        .route(
+        .api_route(
             "/auth/discoverable/finish",
             post(auth::finish_conditional_ui_authentication),
         )
-        .route("/auth/upgrade", post(auth::upgrade_session))
-        .route("/auth/downgrade", post(auth::downgrade_session))
-        .route("/auth/session", get(auth::get_session))
+        .api_route("/auth/upgrade", post(auth::upgrade_session))
+        .api_route("/auth/downgrade", post(auth::downgrade_session))
+        .api_route("/auth/session", get(auth::get_session))
         .layer(SetResponseHeaderLayer::appending(
             VARY,
             HeaderValue::from_static("Cookie"),
@@ -76,8 +89,8 @@ pub fn router(db: Arc<dyn DatabaseClient>, webauthn: Webauthn, config: &AppConfi
         .layer(CacheControlLayer::new().no_store(true).finish());
 
     // Router for endpoints whose responses do not depend on authentication state.
-    let router_unauthenticated: Router<V1State> = Router::new()
-        .route("/config", get(config::get_config))
+    let router_unauthenticated: ApiRouter<V1State> = ApiRouter::new()
+        .api_route("/config", get(config::get_config))
         .layer(
             // Allow clients/proxies to cache for up to 24 hours
             CacheControlLayer::new()
@@ -145,6 +158,17 @@ impl From<DatabaseError> for ApiV1Error {
     }
 }
 
+impl ApiV1Error {
+    fn possible_status_codes() -> Vec<StatusCode> {
+        vec![
+            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::BAD_REQUEST,
+            StatusCode::NOT_FOUND,
+            StatusCode::UNAUTHORIZED,
+        ]
+    }
+}
+
 impl IntoResponse for ApiV1Error {
     fn into_response(self) -> Response {
         #[allow(clippy::enum_glob_use)]
@@ -159,5 +183,42 @@ impl IntoResponse for ApiV1Error {
             NotLoggedIn | SessionExpired | NotAdmin | AuthFailed(_) => StatusCode::UNAUTHORIZED,
         };
         (status, self.to_string()).into_response()
+    }
+}
+
+impl OperationOutput for ApiV1Error {
+    type Inner = Self;
+
+    fn operation_response(
+        _ctx: &mut GenContext,
+        _operation: &mut Operation,
+    ) -> Option<OapiResponse> {
+        Some(OapiResponse {
+            description: "Error response".to_string(),
+            content: [(
+                "text/plain".to_string(),
+                MediaType {
+                    example: Some("Not logged in".into()),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+            ..Default::default()
+        })
+    }
+
+    fn inferred_responses(
+        ctx: &mut GenContext,
+        operation: &mut Operation,
+    ) -> Vec<(Option<u16>, OapiResponse)> {
+        Self::possible_status_codes()
+            .into_iter()
+            .map(|status| {
+                (
+                    Some(status.as_u16()),
+                    Self::operation_response(ctx, operation).unwrap(),
+                )
+            })
+            .collect()
     }
 }

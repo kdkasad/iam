@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use axum::{Router, http::header};
+use aide::axum::ApiRouter;
+use axum::http::header;
 use tower::ServiceBuilder;
 use tower_http::{
     limit::RequestBodyLimitLayer, sensitive_headers::SetSensitiveHeadersLayer, trace::TraceLayer,
@@ -21,9 +22,9 @@ pub fn new_api_router(
     db: Arc<dyn DatabaseClient>,
     webauthn: Webauthn,
     config: &AppConfig,
-) -> Router<()> {
-    Router::new()
-        .nest_service("/v1", v1::router(db, webauthn, config))
+) -> ApiRouter<()> {
+    ApiRouter::new()
+        .nest_api_service("/v1", v1::router(db, webauthn, config))
         .layer(
             // order is top to bottom
             ServiceBuilder::new()

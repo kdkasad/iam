@@ -100,7 +100,7 @@ async fn main() -> ExitCode {
     let ui = new_ui_server(&static_dir);
 
     let router = Router::new()
-        .nest("/api", api)
+        .nest("/api", api.into())
         .fallback_service(ui)
         .layer(SetResponseHeaderLayer::if_not_present(
             X_CONTENT_TYPE_OPTIONS,

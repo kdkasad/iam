@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "sqlx")]
 use sqlx::prelude::FromRow;
@@ -8,15 +9,15 @@ use webauthn_rs::prelude::{
 
 use crate::models::ViaJson;
 
-pub type WrappedPasskey = ViaJson<Passkey>;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(FromRow))]
+#[serde(rename_all = "camelCase")]
 pub struct PasskeyCredential {
     pub id: Uuid,
     pub user_id: Uuid,
     pub display_name: Option<String>,
-    pub passkey: WrappedPasskey,
+    #[schemars(skip)]
+    pub passkey: ViaJson<Passkey>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -28,11 +29,12 @@ impl From<PasskeyCredential> for Passkey {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PasskeyCredentialUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub passkey: Option<WrappedPasskey>,
+    pub passkey: Option<ViaJson<Passkey>>,
 }
 
 impl PasskeyCredentialUpdate {
@@ -50,7 +52,7 @@ impl PasskeyCredentialUpdate {
     #[must_use]
     pub fn with_passkey<P>(mut self, passkey: P) -> Self
     where
-        P: Into<WrappedPasskey>,
+        P: Into<ViaJson<Passkey>>,
     {
         self.passkey = Some(passkey.into());
         self
@@ -63,6 +65,7 @@ impl PasskeyCredentialUpdate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NewPasskeyCredential {
     pub display_name: Option<String>,
     pub passkey: Passkey,
@@ -70,6 +73,7 @@ pub struct NewPasskeyCredential {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(FromRow))]
+#[serde(rename_all = "camelCase")]
 pub struct PasskeyRegistrationState {
     pub id: Uuid,
     pub user_id: Uuid,
@@ -80,6 +84,7 @@ pub struct PasskeyRegistrationState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(FromRow))]
+#[serde(rename_all = "camelCase")]
 pub struct PasskeyAuthenticationState {
     pub id: Uuid,
     pub email: Option<String>,

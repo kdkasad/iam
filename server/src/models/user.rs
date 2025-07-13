@@ -2,10 +2,11 @@ use crate::{
     db::interface::{DatabaseClient, DatabaseError},
     models::{ErrNotPopulated, PasskeyCredential, Tag},
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 #[serde(rename_all = "camelCase")]
 pub struct User {
@@ -81,7 +82,8 @@ impl User {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UserUpdate {
     pub email: Option<String>,
     pub display_name: Option<String>,
@@ -114,8 +116,9 @@ impl UserUpdate {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
+#[serde(rename_all = "camelCase")]
 pub struct UserCreate {
     pub email: String,
     pub display_name: String,

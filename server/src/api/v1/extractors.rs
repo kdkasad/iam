@@ -1,3 +1,4 @@
+use aide::{OperationInput, openapi::SecurityRequirement};
 use axum::{RequestPartsExt, http::request::Parts};
 use axum_extra::extract::{Cached, CookieJar};
 
@@ -45,6 +46,18 @@ impl axum::extract::FromRequestParts<V1State> for AuthenticatedSession {
     }
 }
 
+impl OperationInput for AuthenticatedSession {
+    fn operation_input(
+        _ctx: &mut aide::generate::GenContext,
+        operation: &mut aide::openapi::Operation,
+    ) {
+        let security = SecurityRequirement::from([("userSession".to_string(), vec![])]);
+        if !operation.security.contains(&security) {
+            operation.security.push(security);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[expect(dead_code)]
 pub struct AdminSession(pub Session);
@@ -63,6 +76,18 @@ impl axum::extract::FromRequestParts<V1State> for AdminSession {
             Ok(AdminSession(session))
         } else {
             Err(ApiV1Error::NotAdmin)
+        }
+    }
+}
+
+impl OperationInput for AdminSession {
+    fn operation_input(
+        _ctx: &mut aide::generate::GenContext,
+        operation: &mut aide::openapi::Operation,
+    ) {
+        let security = SecurityRequirement::from([("adminSession".to_string(), vec![])]);
+        if !operation.security.contains(&security) {
+            operation.security.push(security);
         }
     }
 }

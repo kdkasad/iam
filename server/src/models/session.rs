@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[serde(rename_all = "kebab-case")]
 #[repr(u8)]
@@ -14,13 +15,13 @@ pub enum SessionState {
     Superseded,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub id_hash: EncodableHash,
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub user_id: Uuid,
     pub state: SessionState,
     pub created_at: DateTime<Utc>,
@@ -28,11 +29,11 @@ pub struct Session {
     /// Whether this session has admin privileges.
     pub is_admin: bool,
     /// Session ID hash of this session's parent, if it has one.
-    #[serde(skip_serializing)]
+    #[serde(skip)]
     pub parent_id_hash: Option<EncodableHash>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct SessionUpdate {
     pub state: Option<SessionState>,

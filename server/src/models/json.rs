@@ -1,5 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Wrapper type to encode/decode the encapsulated value as JSON text.
@@ -47,6 +48,28 @@ where
         S: serde::Serializer,
     {
         <T as Serialize>::serialize(&self.0, serializer)
+    }
+}
+
+/// Implement the same schema as `T`.
+impl<T> JsonSchema for ViaJson<T>
+where
+    T: JsonSchema,
+{
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        T::schema_name()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        T::json_schema(generator)
+    }
+
+    fn inline_schema() -> bool {
+        T::inline_schema()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        T::schema_id()
     }
 }
 

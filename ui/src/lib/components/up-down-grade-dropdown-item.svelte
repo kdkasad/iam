@@ -37,7 +37,7 @@
 						'Content-Type': 'application/json'
 					},
 					body: JSON.stringify({
-						target: 'admin'
+						target: 'Admin'
 					}),
 					credentials: 'include'
 				});
