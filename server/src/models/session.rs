@@ -3,36 +3,52 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Session state
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
 #[serde(rename_all = "kebab-case")]
 #[repr(u8)]
 pub enum SessionState {
+    /// Session is active and usable
     Active,
+    /// Session was revoked by the user from another device
     Revoked,
+    /// Session was canceled due to the user logging out
     LoggedOut,
-    /// Session was upgraded or downgraded.
+    /// Session was upgraded or downgraded
     Superseded,
 }
 
+/// # Login session
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
+    /// [`blake3`] hash of the session ID
     #[serde(skip)]
     pub id_hash: EncodableHash,
+    /// UUID of the [`User`][super::User] to which this session belongs
     #[serde(skip)]
     pub user_id: Uuid,
+    /// State of the session
     pub state: SessionState,
+    /// Time at which the session was created
     pub created_at: DateTime<Utc>,
+    /// Time at which the session expires
     pub expires_at: DateTime<Utc>,
-    /// Whether this session has admin privileges.
+    /// Whether this session has admin privileges
     pub is_admin: bool,
-    /// Session ID hash of this session's parent, if it has one.
+    /// [`blake3`] hash of the session ID of this session's parent, if it has one
     #[serde(skip)]
     pub parent_id_hash: Option<EncodableHash>,
 }
 
+/// Data used to update a session
+///
+/// Fields with a value will replace the corresponding field's value in the [`Session`]
+/// to which the update is applied (via [`DatabaseClient::update_session()`][1]).
+///
+/// [1]: crate::db::interface::DatabaseClient::update_session
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct SessionUpdate {
@@ -65,6 +81,8 @@ impl SessionUpdate {
 }
 
 mod encodable_hash {
+    //! # Encodable hash helper
+
     #[cfg(feature = "sqlx")]
     use std::borrow::Cow;
     use std::ops::{Deref, DerefMut};
@@ -77,9 +95,14 @@ mod encodable_hash {
         sqlite::{SqliteArgumentValue, SqliteValueRef},
     };
 
+    /// # Encodable hash helper wrapper
+    ///
+    /// [`EncodableHash`] is a wrapper around [`blake3::Hash`] which implements [`sqlx::Encode`],
+    /// [`sqlx::Decode`], and [`sqlx::Type`] if the `sqlx` feature is enabled. The value is
+    /// encoded/decoded as a binary blob.
+    #[repr(transparent)]
     // don't derive PartialEq or Eq to ensure we use constant-time comparison
     #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-    #[repr(transparent)]
     pub struct EncodableHash(pub blake3::Hash);
 
     #[cfg(feature = "sqlx")]

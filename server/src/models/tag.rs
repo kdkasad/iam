@@ -4,48 +4,38 @@ use uuid::Uuid;
 
 use crate::{
     db::interface::{DatabaseClient, DatabaseError},
-    models::{ErrNotPopulated, User},
+    models::User,
 };
 
+/// # Tag model
+///
+/// A tag is a marker which can be applied to [`User`]s.
+/// Tags can be applied to multiple users, and users can each have multiple tags.
+///
+/// Tags are used to grant privileges/permissions to users. For example, the built-in `iam::admin`
+/// tag allows users to act as an administrator and manage other users in the IAM portal.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
-    id: Uuid,
-    name: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
+    /// Unique identifier
+    pub id: Uuid,
+    /// Tag name (must also be unique)
+    pub name: String,
+    /// Time at which the tag was created
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Time at which the tag was last updated
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 
+    /// List of users to which this tag is applied. Depending on the database, this can be more
+    /// expensive to retrieve than just the tag information, so it is not fetched by default, and
+    /// will have a value of [`None`]. If needed, use [`Tag::fetch_users()`] to populate.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "sqlx", sqlx(skip))]
-    users: Option<Vec<User>>,
+    pub users: Option<Vec<User>>,
 }
 
 impl Tag {
-    #[must_use]
-    pub fn id(&self) -> &Uuid {
-        &self.id
-    }
-
-    #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    #[must_use]
-    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.created_at
-    }
-
-    #[must_use]
-    pub fn updated_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.updated_at
-    }
-
-    pub fn users(&mut self) -> Result<&[User], ErrNotPopulated> {
-        self.users.as_deref().ok_or(ErrNotPopulated)
-    }
-
     pub async fn fetch_users<C>(&mut self, client: C) -> Result<&[User], DatabaseError>
     where
         C: DatabaseClient,
@@ -60,6 +50,12 @@ impl Tag {
     }
 }
 
+/// Data used to update a tag
+///
+/// Fields with a value will replace the corresponding field's value in the [`Tag`]
+/// to which the update is applied (via [`DatabaseClient::update_tag()`][1]).
+///
+/// [1]: crate::db::interface::DatabaseClient::update_tag
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagUpdate {

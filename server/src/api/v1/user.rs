@@ -1,3 +1,5 @@
+//! # v1 user-related API endpoint handlers
+
 use axum::{
     Json,
     extract::{Path, State},

@@ -1,3 +1,5 @@
+//! # HTTP API routing & handlers
+
 use std::sync::Arc;
 
 use aide::openapi::OpenApi;
@@ -36,7 +38,8 @@ impl From<ApiSpecs> for Vec<OpenApi> {
     }
 }
 
-/// Creates a new API router with the given database client.
+/// Creates a new API router with the given database client, [`Webauthn`] client, and
+/// [app configuration][AppConfig].
 pub fn new_api_router(
     db: Arc<dyn DatabaseClient>,
     webauthn: Webauthn,

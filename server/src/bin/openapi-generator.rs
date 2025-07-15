@@ -1,3 +1,10 @@
+#![expect(clippy::doc_markdown)]
+
+//! # OpenAPI specification generator
+//!
+//! This binary generates an OpenAPI specification from [`iam_server`]'s API handlers.
+//! The generated spec is written as JSON to the standard output stream.
+
 use std::sync::Arc;
 
 use iam_server::{api::new_api_router, db::clients::sqlite::SqliteClient, models::AppConfig};

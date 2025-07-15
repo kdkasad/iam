@@ -1,3 +1,5 @@
+//! # Data models
+
 use uuid::Uuid;
 
 mod config;

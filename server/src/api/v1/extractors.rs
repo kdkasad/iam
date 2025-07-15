@@ -1,3 +1,5 @@
+//! # Custom extractors for the v1 API
+
 use aide::{OperationInput, openapi::SecurityRequirement};
 use axum::{RequestPartsExt, http::request::Parts};
 use axum_extra::extract::{Cached, CookieJar};
@@ -8,6 +10,17 @@ use crate::{
     models::{EncodableHash, Session, SessionState},
 };
 
+/// # Authenticated session extractor
+///
+/// [`AuthenticatedSession`] retrieves the client's session ID from the `session_id` cookie,
+/// fetches the session from the database, and validates it to ensure it's active and has not
+/// expired. If this succeeds, the validated [`Session`] is returned by the extractor.
+///
+/// If validation fails, one of the following errors is returned:
+/// - [`ApiV1Error::NotLoggedIn`] if there is no session ID cookie
+/// - [`ApiV1Error::InvalidSessionId`] if the session ID cookie contains an invalid/unparseable value
+/// - [`ApiV1Error::SessionExpired`] if the session is expired or canceled
+/// - [`ApiV1Error::InternalServerError`] if a [`DatabaseError`] occurs
 #[derive(Debug, Clone)]
 pub struct AuthenticatedSession(pub Session);
 
@@ -58,6 +71,11 @@ impl OperationInput for AuthenticatedSession {
     }
 }
 
+/// # Administrator session extractor
+///
+/// [`AdminSession`] is a wrapper around [`AuthenticatedSession`]. It behaves identically, except
+/// it also ensures that the client's session is an administrator session ([`Session::is_admin`]),
+/// returning [`ApiV1Error::NotAdmin`] if not.
 #[derive(Debug, Clone)]
 #[expect(dead_code)]
 pub struct AdminSession(pub Session);

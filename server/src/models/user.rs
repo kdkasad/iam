@@ -16,10 +16,16 @@ pub struct User {
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
 
+    /// List of tags applied to this user. Depending on the database, this can be more expensive to
+    /// retrieve than just the base user information, so it is not fetched by default, and will
+    /// have a value of [`None`]. If needed, use [`User::fetch_tags()`] to populate.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "sqlx", sqlx(skip))]
     tags: Option<Vec<Tag>>,
 
+    /// List of passkeys belonging to this user. Depending on the database, this can be more
+    /// expensive to retrieve than just the base user information, so it is not fetched by default,
+    /// and will have a value of [`None`]. If needed, use [`User::fetch_passkeys()`] to populate.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "sqlx", sqlx(skip))]
     passkeys: Option<Vec<PasskeyCredential>>,
@@ -82,6 +88,12 @@ impl User {
     }
 }
 
+/// Data used to update a user
+///
+/// Fields with a value will replace the corresponding field's value in the [`User`]
+/// to which the update is applied (via [`DatabaseClient::update_user()`][1]).
+///
+/// [1]: crate::db::interface::DatabaseClient::update_user
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdate {
@@ -116,6 +128,7 @@ impl UserUpdate {
     }
 }
 
+/// Data used to create a user with [`DatabaseClient::create_user()`]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 #[serde(rename_all = "camelCase")]

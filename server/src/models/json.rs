@@ -4,6 +4,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Wrapper type to encode/decode the encapsulated value as JSON text.
+///
+/// Implements [`serde::Deserialize`], [`serde::Serialize`], [`schemars::JsonSchema`] by delegating
+/// to the wrapped type's implementation.
+///
+/// Depending on database features enabled, [`sqlx::Decode`], [`sqlx::Encode`], and [`sqlx::Type`]
+/// are implemented by delegating to [`sqlx::types::Json<&T>`]'s implementation.
 #[derive(Debug, Clone, Copy)]
 pub struct ViaJson<T>(pub T);
 

@@ -1,3 +1,5 @@
+//! # v1 config-related API endpoint handlers
+
 use axum::extract::State;
 
 use crate::{

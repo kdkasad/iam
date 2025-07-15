@@ -1,7 +1,10 @@
+//! # Custom HTTP middleware
+
 use axum::http::{HeaderValue, header::CACHE_CONTROL};
 use chrono::Duration;
 use tower_http::set_header::SetResponseHeaderLayer;
 
+/// Publicity value used in the [`CacheControlLayer`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Publicity {
     Public,
@@ -17,6 +20,26 @@ impl Publicity {
     }
 }
 
+/// # `Cache-Control` middleware layer
+///
+/// This layer sets the `Cache-Control` HTTP header on responses which do not already contain
+/// a value for that header.
+///
+/// # Examples
+///
+/// ```ignore
+/// # // FIXME: see if we can doctest private items
+/// # use iam_server::api::middleware::{CacheControlLayer, Publicity};
+/// # use chrono::Duration;
+/// CacheControlLayer::new()
+///     .max_age(Duration::days(1))
+///     .publicity(Publicity::Public)
+///     .finish()
+/// ```
+/// The above layer will add the following header to responses:
+/// ```text
+/// Cache-Control: public, max-age=86400
+/// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CacheControlLayer {
     max_age: Option<Duration>,
@@ -68,7 +91,7 @@ impl CacheControlLayer {
                 value.push_str(p.to_str());
             }
             if let Some(ma) = self.max_age {
-                value.push_str(", ");
+                value.push_str(", max-age=");
                 value.push_str(&ma.num_seconds().to_string());
             }
         }

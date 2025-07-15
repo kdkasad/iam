@@ -1,3 +1,5 @@
+//! v1 API implementation
+
 use std::sync::Arc;
 
 use aide::{
@@ -44,7 +46,7 @@ struct V1StateInner {
 
 type V1State = Arc<V1StateInner>;
 
-/// Returns a sub-router for `/api/v1`
+/// Returns a sub-router for `/api/v1` and its [`OpenApi`] specification.
 ///
 /// # Panics
 ///
@@ -127,6 +129,11 @@ pub fn router_and_spec(
     (router, openapi)
 }
 
+/// # Error type for the v1 API
+///
+/// Implements [`IntoResponse`], thus returning a response with a sensible status code when used as
+/// the return type of a handler. Currently, the response body is a plain text error message, but
+/// that will change to JSON in the future.
 #[derive(Debug, thiserror::Error)]
 enum ApiV1Error {
     #[error("Not found")]

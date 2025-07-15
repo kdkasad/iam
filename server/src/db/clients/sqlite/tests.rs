@@ -1,3 +1,7 @@
+//! # Unit tests for [`SqliteClient`]
+//!
+//! *TODO: extract these into a common UT suite that can be run on all [`DatabaseClient`]s*
+
 use chrono::SubsecRound;
 use uuid::Uuid;
 use webauthn_rs::{

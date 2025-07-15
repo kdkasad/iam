@@ -1,15 +1,21 @@
+//! # Helper utilities
+
 use std::marker::PhantomData;
 
 use aide::{
-    OperationOutput,
     generate::GenContext,
     openapi::{Operation, Response},
+    OperationOutput,
 };
 use axum::{body::Bytes, http::header::CONTENT_TYPE, response::IntoResponse};
 use schemars::JsonSchema;
 use serde::Serialize;
 
-/// Helper response type for pre-serialized JSON data.
+/// # Pre-serialized JSON response
+///
+/// This is a helper type for responses which consist of JSON serialized from some static (as in
+/// unchanging) shared object. This helper avoids cloning both the object being serialized and the
+/// serialized JSON data.
 ///
 /// [`PreSerializedJson::new()`] serializes the input object and stores the
 /// resulting JSON buffer, re-using that every time it is converted into a
@@ -17,6 +23,23 @@ use serde::Serialize;
 ///
 /// [`PreSerializedJson`] is cheaply cloneable and so does not need to be
 /// wrapped in an [`Arc`][std::sync::Arc].
+///
+/// # Examples
+///
+/// ```ignore
+/// # // FIXME: see if we can doctest private items
+/// # #[derive(Debug, Clone, Serialize)]
+/// # struct SomeTypeThatImplementsSerialize {
+/// #     foo: i32,
+/// # }
+/// let foo = SomeTypeThatImplementsSerialize {
+///     bar: 1,
+/// };
+/// let json = PreSerializedJson::new(&foo);  // serializes `foo` and stores the result
+/// let r1 = json.into_response();  // won't clone `foo` or the JSON
+/// let json2 = json.clone();  // will only clone the pointer to the JSON, not the contents
+/// let r2 = json.into_response();  // won't clone `foo` or the JSON
+/// ```
 #[derive(Debug, Clone)]
 pub struct PreSerializedJson<T: ?Sized + Serialize> {
     json_bytes: Bytes,

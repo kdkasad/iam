@@ -1,3 +1,10 @@
+#![expect(clippy::doc_markdown)]
+
+//! # SQLite3 database client
+//!
+//! A [`DatabaseClient`] which uses a SQLite3 database as the backend. Either memory-backed or
+//! file-backed databases can be used.
+
 use std::{env::VarError, pin::Pin, time::Duration};
 
 use sqlx::{
@@ -17,21 +24,32 @@ use crate::{
     },
 };
 
+/// Represents errors that can occur when creating a new SQLite3 client, e.g. with
+/// [`SqliteClient::open()`] or [`SqliteClient::new_memory()`].
 #[derive(Debug, thiserror::Error)]
 pub enum CreateSqliteClientError {
+    /// An environment variable (whose name is given by the field) was required but not set.
     #[error("required environment variable not set: {0}")]
     MissingEnv(&'static str),
 
+    /// An environment variable (whose name is given by the field) was set but is not valid UTF-8.
     #[error("environment variable {0} is not valid UTF-8")]
     EnvNotUtf8(&'static str),
 
+    /// Applying a database migration failed. The [upstream error][sqlx::migrate::MigrateError] is
+    /// contained in the tuple field.
     #[error("failed to migrate database to current version: {0}")]
     Migration(#[from] sqlx::migrate::MigrateError),
 
+    /// Some other database error occurred. The [upstream error][sqlx::Error] is contained in the
+    /// tuple field.
     #[error("database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
 }
 
+/// # SQLite3 database backend
+///
+/// See [the module-level documentation][crate::db::clients::sqlite] for details.
 #[derive(Debug, Clone)]
 pub struct SqliteClient {
     pool: SqlitePool,
@@ -236,7 +254,7 @@ impl DatabaseClient for SqliteClient {
         Box::pin(async move {
             sqlx::query("INSERT INTO users_tags (user_id, tag_id) VALUES ($1, $2)")
                 .bind(user_id)
-                .bind(tag.id())
+                .bind(tag.id)
                 .execute(&pool)
                 .await?;
             Ok(())
@@ -252,7 +270,7 @@ impl DatabaseClient for SqliteClient {
         Box::pin(async move {
             sqlx::query("DELETE FROM users_tags WHERE user_id = $1 AND tag_id = $2")
                 .bind(user_id)
-                .bind(tag.id())
+                .bind(tag.id)
                 .execute(&pool)
                 .await?;
             Ok(())
@@ -555,20 +573,6 @@ impl DatabaseClient for SqliteClient {
         })
     }
 
-    fn increment_passkey_sign_count<'id>(
-        &self,
-        id: &'id Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'id>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            sqlx::query("UPDATE passkeys SET sign_count = sign_count + 1, last_used_at = unixepoch() WHERE id = $1")
-                .bind(id)
-                .execute(&pool)
-                .await?;
-            Ok(())
-        })
-    }
-
     fn create_passkey_registration<'a>(
         &self,
         registration: &'a PasskeyRegistrationState,
@@ -732,7 +736,7 @@ impl DatabaseClient for SqliteClient {
 }
 
 /// Cleans up expired passkey registrations and authentications.
-pub async fn do_cleanup(pool: &SqlitePool) {
+async fn do_cleanup(pool: &SqlitePool) {
     if let Err(err) =
         sqlx::query("DELETE FROM passkey_registrations WHERE created_at < unixepoch() - 300")
             .execute(pool)

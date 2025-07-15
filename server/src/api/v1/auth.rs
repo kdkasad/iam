@@ -1,3 +1,5 @@
+//! # v1 authentication-related API endpoint handlers
+
 use std::borrow::Cow;
 
 use axum::{Json, extract::State};
@@ -24,7 +26,7 @@ use crate::{
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
         PasskeyCredentialUpdate, PasskeyRegistrationState, Session, SessionState, SessionUpdate,
-        Tag, User, UserCreate, ViaJson,
+        User, UserCreate, ViaJson,
     },
 };
 
@@ -415,7 +417,7 @@ pub async fn upgrade_session(
     let tags = state.db.get_tags_by_user_id(&session.user_id).await?;
     if !tags
         .iter()
-        .map(Tag::name)
+        .map(|t| &*t.name)
         .any(|tag_name| tag_name == "iam::admin")
     {
         return Err(ApiV1Error::NotAdmin);
