@@ -14,7 +14,7 @@
 		isLoading = true;
 		const start_response = await fetch('/api/v1/register/start', {
 			method: 'POST',
-			body: JSON.stringify({ email, display_name: displayName }),
+			body: JSON.stringify({ email, displayName }),
 			headers: {
 				'Content-Type': 'application/json'
 			},
@@ -49,10 +49,7 @@
 		const finish_response = await fetch('/api/v1/register/finish', {
 			method: 'POST',
 			body: JSON.stringify({
-				user: {
-					email,
-					display_name: displayName
-				},
+				user: { email, displayName },
 				passkey: credential.toJSON()
 			}),
 			headers: {
