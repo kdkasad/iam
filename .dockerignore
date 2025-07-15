@@ -1,0 +1,12 @@
+Dockerfile
+.git/
+.jj/
+
+.DS_Store
+
+target/
+node_modules/
+ui/build/
+ui/.svelte-kit/
+
+*.sqlite3
