@@ -14,7 +14,7 @@ use aide::{
     },
 };
 use axum::{
-    Router,
+    Extension, Router,
     http::{HeaderValue, Method, StatusCode, header::VARY},
     response::{IntoResponse, Response},
 };
@@ -94,15 +94,27 @@ pub fn router_and_spec(
         .layer(CacheControlLayer::new().no_store(true).finish());
 
     // Router for endpoints whose responses do not depend on authentication state.
-    let router_unauthenticated: ApiRouter<V1State> = ApiRouter::new()
+    let mut router_unauthenticated: ApiRouter<V1State> = ApiRouter::new()
         .api_route("/config", get(config::get_config))
-        .layer(
-            // Allow clients/proxies to cache for up to 24 hours
-            CacheControlLayer::new()
-                .publicity(Publicity::Public)
-                .max_age(Duration::hours(24))
-                .finish(),
+        .api_route("/docs/openapi.json", get(get_openapi_json));
+
+    // If the `scalar` feature is enabled, add the Scalar UI to the unauthenticated router
+    #[cfg(feature = "scalar")]
+    {
+        use aide::scalar::Scalar;
+        router_unauthenticated = router_unauthenticated.route(
+            "/docs",
+            Scalar::new("/api/v1/docs/openapi.json").axum_route(),
         );
+    }
+
+    // Allow clients/proxies to cache for up to 24 hours
+    router_unauthenticated = router_unauthenticated.layer(
+        CacheControlLayer::new()
+            .publicity(Publicity::Public)
+            .max_age(Duration::hours(24))
+            .finish(),
+    );
 
     let state = V1StateInner {
         db,
@@ -110,7 +122,7 @@ pub fn router_and_spec(
         config: PreSerializedJson::new(config).expect("serializing app config failed"),
     };
     let mut openapi = OpenApi::default();
-    let router = router_public
+    let mut router = router_public
         .merge(router_auth)
         .merge(router_unauthenticated)
         .with_state(Arc::new(state))
@@ -126,6 +138,12 @@ pub fn router_and_spec(
                 },
             )
         });
+
+    // Add OpenAPI spec JSON to the router
+    router = router.route_layer(Extension(
+        PreSerializedJson::new(&openapi).expect("serializing OpenAPI spec failed"),
+    ));
+
     (router, openapi)
 }
 
@@ -245,4 +263,10 @@ impl OperationOutput for ApiV1Error {
             })
             .collect()
     }
+}
+
+async fn get_openapi_json(
+    Extension(api): Extension<PreSerializedJson<OpenApi>>,
+) -> PreSerializedJson<OpenApi> {
+    api
 }

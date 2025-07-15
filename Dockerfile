@@ -24,11 +24,12 @@ RUN apk add build-base openssl-dev openssl-libs-static
 # Build server
 WORKDIR /src
 COPY . .
+ARG SERVER_FEATURES=sqlite3
 RUN \
     --mount=type=cache,target=target \
     --mount=type=cache,target=$CARGO_HOME/git \
     --mount=type=cache,target=$CARGO_HOME/registry \
-    cargo build -p iam-server --bin iam-server --release --locked --features sqlite3 && \
+    cargo build -p iam-server --bin iam-server --release --locked --features $SERVER_FEATURES && \
     # Copy executable out of the cache directory so it can be used in the final image
     cp target/release/iam-server .
 

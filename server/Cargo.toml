@@ -12,6 +12,7 @@ readme.workspace = true
 default = ["sqlite3"]
 sqlite3 = ["sqlx", "sqlx/sqlite"]
 sqlx = ["dep:sqlx"]
+scalar = ["aide/scalar"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
