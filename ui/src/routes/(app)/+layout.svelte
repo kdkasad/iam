@@ -11,6 +11,9 @@
 	let session = $derived(data.session!);
 	setContext<() => User>('user', () => user);
 	setContext<() => Session>('session', () => session);
+    $effect(() => {
+        console.log('user updated', data.user)
+    });
 </script>
 
 <Sidebar.Provider>
