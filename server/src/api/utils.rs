@@ -8,6 +8,7 @@ use aide::{
     OperationOutput,
 };
 use axum::{body::Bytes, http::header::CONTENT_TYPE, response::IntoResponse};
+use axum_extra::extract::CookieJar;
 use schemars::JsonSchema;
 use serde::Serialize;
 
@@ -99,5 +100,70 @@ where
         operation: &mut Operation,
     ) -> Vec<(Option<u16>, Response)> {
         <axum::Json<T> as OperationOutput>::inferred_responses(ctx, operation)
+    }
+}
+
+/// # Helper type representing a response with cookies
+///
+/// This type exists because [`aide`] can't deduce the proper response schema for types like
+/// a plain [`CookieJar`] or a `(CookieJar, T)` tuple. This type's [`IntoResponse`] implementation
+/// behaves identically to `(CookieJar, T)`, but its [`OperationOutput`] implementation delegates
+/// to the inner type `T`.
+pub struct WithCookies<T> {
+    pub response: T,
+    pub cookies: CookieJar,
+}
+
+impl<T> From<(CookieJar, T)> for WithCookies<T> {
+    fn from((cookies, response): (CookieJar, T)) -> Self {
+        Self { response, cookies }
+    }
+}
+
+impl<T> From<WithCookies<T>> for (CookieJar, T) {
+    fn from(wc: WithCookies<T>) -> Self {
+        (wc.cookies, wc.response)
+    }
+}
+
+impl From<CookieJar> for WithCookies<()> {
+    fn from(cookies: CookieJar) -> Self {
+        Self {
+            response: (),
+            cookies,
+        }
+    }
+}
+
+impl<T> WithCookies<T> {
+    pub fn new(cookies: CookieJar, response: T) -> Self {
+        (cookies, response).into()
+    }
+}
+
+impl<T> IntoResponse for WithCookies<T>
+where
+    T: IntoResponse,
+{
+    fn into_response(self) -> axum::response::Response {
+        (self.cookies, self.response).into_response()
+    }
+}
+
+impl<T> OperationOutput for WithCookies<T>
+where
+    T: OperationOutput,
+{
+    type Inner = T::Inner;
+
+    fn operation_response(ctx: &mut GenContext, operation: &mut Operation) -> Option<Response> {
+        T::operation_response(ctx, operation)
+    }
+
+    fn inferred_responses(
+        ctx: &mut GenContext,
+        operation: &mut Operation,
+    ) -> Vec<(Option<u16>, Response)> {
+        T::inferred_responses(ctx, operation)
     }
 }

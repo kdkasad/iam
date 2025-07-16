@@ -21,7 +21,7 @@ use webauthn_rs::prelude::{
 use webauthn_rs_proto::{AuthenticatorSelectionCriteria, ResidentKeyRequirement};
 
 use crate::{
-    api::v1::{ApiV1Error, V1State, extractors::AuthenticatedSession},
+    api::{utils::WithCookies, v1::{extractors::AuthenticatedSession, ApiV1Error, V1State}},
     db::interface::{DatabaseClient, DatabaseError},
     models::{
         NewPasskeyCredential, PasskeyAuthenticationState, PasskeyAuthenticationStateType,
@@ -52,7 +52,7 @@ pub async fn start_registration(
     cookies: CookieJar,
     State(state): State<V1State>,
     Json(request): Json<UserCreate>,
-) -> Result<(CookieJar, Json<CreationChallengeResponse>), ApiV1Error> {
+) -> Result<WithCookies<Json<CreationChallengeResponse>>, ApiV1Error> {
     let user_id = Uuid::new_v4();
     let (mut challenge, reg) = state.webauthn.start_passkey_registration(
         user_id,
@@ -81,7 +81,7 @@ pub async fn start_registration(
                 .expires(Expiration::Session),
         ),
         Json(challenge),
-    ))
+    ).into())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -94,7 +94,7 @@ pub async fn finish_registration(
     cookies: CookieJar,
     State(state): State<V1State>,
     Json(request): Json<FinishRegistrationRequest>,
-) -> Result<(CookieJar, Json<User>), ApiV1Error> {
+) -> Result<WithCookies<Json<User>>, ApiV1Error> {
     let Some(registration_id_cookie) = cookies.get("registration_id") else {
         return Err(ApiV1Error::InvalidRegistrationId);
     };
@@ -142,7 +142,7 @@ pub async fn finish_registration(
     Ok((
         cookies.remove(new_secure_cookie(REGISTRATION_ID_COOKIE, "")),
         Json(user),
-    ))
+    ).into())
 }
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
@@ -154,7 +154,7 @@ pub async fn start_authentication(
     cookies: CookieJar,
     State(state): State<V1State>,
     Json(request): Json<AuthenticationStartRequest>,
-) -> Result<(CookieJar, Json<RequestChallengeResponse>), ApiV1Error> {
+) -> Result<WithCookies<Json<RequestChallengeResponse>>, ApiV1Error> {
     let passkeys: Vec<Passkey> = state
         .db
         .get_passkeys_by_user_email(&request.email)
@@ -183,14 +183,14 @@ pub async fn start_authentication(
                 .expires(Expiration::Session),
         ),
         Json(challenge),
-    ))
+    ).into())
 }
 
 pub async fn finish_authentication(
     cookies: CookieJar,
     State(state): State<V1State>,
     Json(request): Json<PublicKeyCredential>,
-) -> Result<(CookieJar, Json<User>), ApiV1Error> {
+) -> Result<WithCookies<Json<User>>, ApiV1Error> {
     let Some(authentication_id_cookie) = cookies.get(AUTHENTICATION_ID_COOKIE) else {
         return Err(ApiV1Error::InvalidAuthenticationId);
     };
@@ -222,7 +222,7 @@ pub async fn finish_authentication(
     Ok((
         cookies.remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, "")),
         Json(user),
-    ))
+    ).into())
 }
 
 async fn do_passkey_update(
@@ -252,7 +252,7 @@ async fn do_passkey_update(
 pub async fn start_conditional_ui_authentication(
     State(state): State<V1State>,
     cookies: CookieJar,
-) -> Result<(CookieJar, Json<RequestChallengeResponse>), ApiV1Error> {
+) -> Result<WithCookies<Json<RequestChallengeResponse>>, ApiV1Error> {
     let (challenge, disco_state) = state.webauthn.start_discoverable_authentication()?;
     let auth_state = PasskeyAuthenticationState {
         id: Uuid::new_v4(),
@@ -267,14 +267,14 @@ pub async fn start_conditional_ui_authentication(
                 .expires(Expiration::Session),
         ),
         Json(challenge),
-    ))
+    ).into())
 }
 
 pub async fn finish_conditional_ui_authentication(
     State(state): State<V1State>,
     cookies: CookieJar,
     Json(request): Json<PublicKeyCredential>,
-) -> Result<(CookieJar, Json<User>), ApiV1Error> {
+) -> Result<WithCookies<Json<User>>, ApiV1Error> {
     // Get the authentication ID from the cookie
     let Some(auth_id_cookie) = cookies.get(AUTHENTICATION_ID_COOKIE) else {
         debug!("No auth ID cookie found");
@@ -336,7 +336,7 @@ pub async fn finish_conditional_ui_authentication(
     Ok((
         cookies.remove(new_secure_cookie(AUTHENTICATION_ID_COOKIE, "")),
         Json(user),
-    ))
+    ).into())
 }
 
 async fn new_session(
@@ -383,7 +383,7 @@ pub async fn logout(
     State(state): State<V1State>,
     AuthenticatedSession(session): AuthenticatedSession,
     Cached(cookies): Cached<CookieJar>,
-) -> Result<CookieJar, ApiV1Error> {
+) -> Result<WithCookies<()>, ApiV1Error> {
     let session = state.db.get_session_by_id_hash(&session.id_hash).await?;
     if session.state == SessionState::Active {
         state
@@ -395,7 +395,7 @@ pub async fn logout(
             .await?;
     }
     let new_cookies = cookies.remove(new_secure_cookie(SESSION_ID_COOKIE, ""));
-    Ok(new_cookies)
+    Ok(new_cookies.into())
 }
 
 /// Describes what kind of session upgrade to perform.
@@ -412,7 +412,7 @@ pub async fn upgrade_session(
     Cached(cookies): Cached<CookieJar>,
     AuthenticatedSession(session): AuthenticatedSession,
     Json(target): Json<UpgradeTarget>,
-) -> Result<CookieJar, ApiV1Error> {
+) -> Result<WithCookies<()>, ApiV1Error> {
     // Check if user has admin tag
     let tags = state.db.get_tags_by_user_id(&session.user_id).await?;
     if !tags
@@ -430,7 +430,7 @@ pub async fn upgrade_session(
                 new_session(cookies, &*state.db, &session.user_id, true, Some(&session)).await?;
             // Invalidate current session
             supersede_session(&*state.db, &session).await?;
-            Ok(cookies)
+            Ok(cookies.into())
         }
     }
 }
@@ -440,7 +440,7 @@ pub async fn downgrade_session(
     State(state): State<V1State>,
     Cached(mut cookies): Cached<CookieJar>,
     AuthenticatedSession(session): AuthenticatedSession,
-) -> Result<CookieJar, ApiV1Error> {
+) -> Result<WithCookies<()>, ApiV1Error> {
     if let Some(parent_id_hash) = session.parent_id_hash {
         let parent_session = state.db.get_session_by_id_hash(&parent_id_hash).await?;
         // We can't actually return to the parent session since we don't know the non-hashed ID, so we
@@ -455,7 +455,7 @@ pub async fn downgrade_session(
         .await?;
         // Invalidate the current session
         supersede_session(&*state.db, &session).await?;
-        Ok(cookies)
+        Ok(cookies.into())
     } else {
         Err(ApiV1Error::DowngradeImpossible)
     }
